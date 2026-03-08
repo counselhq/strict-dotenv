@@ -1,2 +1,6 @@
+# Ignore .env files except in testdata directory
 .env*
 !testdata/.env*
+
+# Ignore os-specific files
+.DS_Store
