@@ -1,0 +1,608 @@
+package strictdotenv
+
+import (
+	"errors"
+	"fmt"
+	"maps"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestNewEnvStore(t *testing.T) {
+	store := NewEnvStore()
+	if store == nil {
+		t.Fatal("NewEnvStore returned nil")
+	}
+	if len(store) != 0 {
+		t.Fatalf("NewEnvStore returned non-empty store: %v", store)
+	}
+
+	store.Set("KEY", "value", false)
+	if got := store["KEY"]; got != "value" {
+		t.Fatalf("store should be writable, got %q", got)
+	}
+}
+
+func TestEnvStoreGet(t *testing.T) {
+	store := EnvStore{"PRESENT": "value"}
+
+	t.Run("returns existing value", func(t *testing.T) {
+		got, err := store.Get("PRESENT", true)
+		if err != nil {
+			t.Fatalf("Get returned unexpected error: %v", err)
+		}
+		if got != "value" {
+			t.Fatalf("Get returned %q, want %q", got, "value")
+		}
+	})
+
+	t.Run("returns empty value for missing optional key", func(t *testing.T) {
+		got, err := store.Get("MISSING", false)
+		if err != nil {
+			t.Fatalf("Get returned unexpected error: %v", err)
+		}
+		if got != "" {
+			t.Fatalf("Get returned %q, want empty string", got)
+		}
+	})
+
+	t.Run("returns wrapped error for missing required key", func(t *testing.T) {
+		got, err := store.Get("MISSING", true)
+		if err == nil {
+			t.Fatal("Get returned nil error for missing required key")
+		}
+		if got != "" {
+			t.Fatalf("Get returned %q, want empty string", got)
+		}
+		if !errors.Is(err, ErrMissingRequiredKey) {
+			t.Fatalf("Get error = %v, want wrapped ErrMissingRequiredKey", err)
+		}
+		if !strings.Contains(err.Error(), "MISSING") {
+			t.Fatalf("Get error = %q, want missing key name included", err.Error())
+		}
+	})
+}
+
+func TestEnvStoreSet(t *testing.T) {
+	t.Run("sets missing keys", func(t *testing.T) {
+		store := NewEnvStore()
+		store.Set("KEY", "value", false)
+		assertStoreEqual(t, store, EnvStore{"KEY": "value"})
+	})
+
+	t.Run("does not overwrite existing values when overwrite is false", func(t *testing.T) {
+		store := EnvStore{"KEY": "original"}
+		store.Set("KEY", "replacement", false)
+		assertStoreEqual(t, store, EnvStore{"KEY": "original"})
+	})
+
+	t.Run("overwrites existing values when overwrite is true", func(t *testing.T) {
+		store := EnvStore{"KEY": "original"}
+		store.Set("KEY", "replacement", true)
+		assertStoreEqual(t, store, EnvStore{"KEY": "replacement"})
+	})
+}
+
+func TestEnvStoreProcessValue(t *testing.T) {
+	t.Run("returns wrapped error for missing key", func(t *testing.T) {
+		store := NewEnvStore()
+
+		err := store.ProcessValue("MISSING", nil)
+		if err == nil {
+			t.Fatal("ProcessValue returned nil error for missing key")
+		}
+		if !errors.Is(err, ErrMissingRequiredKey) {
+			t.Fatalf("ProcessValue error = %v, want wrapped ErrMissingRequiredKey", err)
+		}
+		if !strings.Contains(err.Error(), "MISSING") {
+			t.Fatalf("ProcessValue error = %q, want missing key name included", err.Error())
+		}
+	})
+
+	t.Run("uses zero-value options when config is nil", func(t *testing.T) {
+		store := EnvStore{"KEY": "line1\\nline2\rline3"}
+
+		if err := store.ProcessValue("KEY", nil); err != nil {
+			t.Fatalf("ProcessValue returned unexpected error: %v", err)
+		}
+
+		if got := store["KEY"]; got != `line1\nline2`+"\r"+`line3` {
+			t.Fatalf("processed value = %q, want %q", got, `line1\nline2`+"\r"+`line3`)
+		}
+	})
+
+	t.Run("resolves base and key-specific parse config", func(t *testing.T) {
+		store := EnvStore{
+			"KEY":   "a\\nb\rc",
+			"OTHER": "d\\ne\rf",
+		}
+		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
+			UnescapeBackslashN: BoolPtr(true),
+			TransformCRToLF:    BoolPtr(true),
+		}).WithKeyOptions("KEY", &CustomParseOptions{
+			UnescapeBackslashN: BoolPtr(false),
+			TransformCRToLF:    BoolPtr(false),
+		})
+
+		if err := store.ProcessValue("KEY", cfg); err != nil {
+			t.Fatalf("ProcessValue returned unexpected error for key-specific config: %v", err)
+		}
+		if err := store.ProcessValue("OTHER", cfg); err != nil {
+			t.Fatalf("ProcessValue returned unexpected error for base config: %v", err)
+		}
+
+		assertStoreEqual(t, store, EnvStore{
+			"KEY":   "a\\nb\rc",
+			"OTHER": "d\ne\nf",
+		})
+	})
+
+	t.Run("leaves the original value unchanged when processing fails", func(t *testing.T) {
+		store := EnvStore{"KEY": "trailing\\"}
+		cfg := NewParseConfig().WithRecommendedDefaults()
+
+		err := store.ProcessValue("KEY", cfg)
+		if err == nil {
+			t.Fatal("ProcessValue returned nil error for invalid value")
+		}
+		if !strings.Contains(err.Error(), "KEY: trailing backslash in double-quoted value") {
+			t.Fatalf("ProcessValue error = %q, want key-specific processing error", err.Error())
+		}
+		if got := store["KEY"]; got != "trailing\\" {
+			t.Fatalf("processed value = %q, want original value preserved", got)
+		}
+	})
+}
+
+func TestEnvStoreProcessValues(t *testing.T) {
+	t.Run("uses zero-value options when config is nil", func(t *testing.T) {
+		store := EnvStore{
+			"A": "a\\nb",
+			"B": "c\rd",
+		}
+
+		if err := store.ProcessValues(nil); err != nil {
+			t.Fatalf("ProcessValues returned unexpected error: %v", err)
+		}
+
+		assertStoreEqual(t, store, EnvStore{
+			"A": `a\nb`,
+			"B": "c\rd",
+		})
+	})
+
+	t.Run("applies base and key-specific parse config", func(t *testing.T) {
+		store := EnvStore{
+			"BASE":  "a\\nb",
+			"KEY":   "c\\nd\re",
+			"OTHER": "f\rg",
+		}
+		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
+			UnescapeBackslashN: BoolPtr(true),
+			TransformCRToLF:    BoolPtr(true),
+		}).WithKeyOptions("KEY", &CustomParseOptions{
+			UnescapeBackslashN: BoolPtr(false),
+			TransformCRToLF:    BoolPtr(false),
+		})
+
+		if err := store.ProcessValues(cfg); err != nil {
+			t.Fatalf("ProcessValues returned unexpected error: %v", err)
+		}
+
+		assertStoreEqual(t, store, EnvStore{
+			"BASE":  "a\nb",
+			"KEY":   "c\\nd\re",
+			"OTHER": "f\ng",
+		})
+	})
+
+	t.Run("returns an error and leaves the store unchanged when any value fails", func(t *testing.T) {
+		store := EnvStore{
+			"BAD":  "trailing\\",
+			"GOOD": "a\\nb",
+		}
+		want := maps.Clone(store)
+		cfg := NewParseConfig().WithRecommendedDefaults()
+
+		err := store.ProcessValues(cfg)
+		if err == nil {
+			t.Fatal("ProcessValues returned nil error for invalid value")
+		}
+		if !strings.Contains(err.Error(), "BAD: trailing backslash in double-quoted value") {
+			t.Fatalf("ProcessValues error = %q, want key-specific processing error", err.Error())
+		}
+
+		assertStoreEqual(t, store, want)
+	})
+}
+
+func TestEnvStoreSetFromDotEnv(t *testing.T) {
+	t.Run("nil config uses zero-value options and preserves existing entries by default", func(t *testing.T) {
+		store := EnvStore{"EXISTING": "keep"}
+		path := writeDotEnvFile(t, "EXISTING=replace\nNEW=\"line1\\nline2\"\n")
+
+		if err := store.SetFromDotEnv(path, nil); err != nil {
+			t.Fatalf("SetFromDotEnv returned unexpected error: %v", err)
+		}
+
+		assertStoreEqual(t, store, EnvStore{
+			"EXISTING": "keep",
+			"NEW":      `line1\nline2`,
+		})
+	})
+
+	t.Run("honors parse config overwrite", func(t *testing.T) {
+		store := EnvStore{"EXISTING": "keep"}
+		path := writeDotEnvFile(t, "EXISTING=replace\nNEW=value\n")
+		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)})
+
+		if err := store.SetFromDotEnv(path, cfg); err != nil {
+			t.Fatalf("SetFromDotEnv returned unexpected error: %v", err)
+		}
+
+		assertStoreEqual(t, store, EnvStore{
+			"EXISTING": "replace",
+			"NEW":      "value",
+		})
+	})
+
+	t.Run("returns parser errors", func(t *testing.T) {
+		store := NewEnvStore()
+		path := writeDotEnvFile(t, "INVALID LINE")
+
+		err := store.SetFromDotEnv(path, nil)
+		if err == nil {
+			t.Fatal("SetFromDotEnv returned nil error for invalid dotenv file")
+		}
+		if !strings.Contains(err.Error(), filepath.Base(path)+":1:") {
+			t.Fatalf("SetFromDotEnv error = %q, want file name and line number", err.Error())
+		}
+	})
+}
+
+func TestEnvStoreSetFromString(t *testing.T) {
+	t.Run("nil config uses zero-value options and preserves existing entries by default", func(t *testing.T) {
+		store := EnvStore{"EXISTING": "keep"}
+
+		if err := store.SetFromString("EXISTING=replace\nNEW=\"line1\\nline2\"\n", "inline.env", nil); err != nil {
+			t.Fatalf("SetFromString returned unexpected error: %v", err)
+		}
+
+		assertStoreEqual(t, store, EnvStore{
+			"EXISTING": "keep",
+			"NEW":      `line1\nline2`,
+		})
+	})
+
+	t.Run("uses the default source name when name is empty", func(t *testing.T) {
+		store := NewEnvStore()
+
+		err := store.SetFromString("INVALID LINE", "", nil)
+		if err == nil {
+			t.Fatal("SetFromString returned nil error for invalid dotenv string")
+		}
+		if !strings.Contains(err.Error(), "string:1:") {
+			t.Fatalf("SetFromString error = %q, want default source name and line number", err.Error())
+		}
+	})
+}
+
+func TestEnvStoreSetFromReader(t *testing.T) {
+	t.Run("loads values and honors parse config overwrite", func(t *testing.T) {
+		store := EnvStore{"EXISTING": "keep"}
+		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)})
+
+		err := store.SetFromReader(strings.NewReader("EXISTING=replace\nNEW=value\n"), "reader.env", cfg)
+		if err != nil {
+			t.Fatalf("SetFromReader returned unexpected error: %v", err)
+		}
+
+		assertStoreEqual(t, store, EnvStore{
+			"EXISTING": "replace",
+			"NEW":      "value",
+		})
+	})
+
+	t.Run("uses the default source name when name is empty", func(t *testing.T) {
+		store := NewEnvStore()
+
+		err := store.SetFromReader(strings.NewReader("INVALID LINE"), "", nil)
+		if err == nil {
+			t.Fatal("SetFromReader returned nil error for invalid dotenv reader")
+		}
+		if !strings.Contains(err.Error(), "io.Reader:1:") {
+			t.Fatalf("SetFromReader error = %q, want default source name and line number", err.Error())
+		}
+	})
+
+	t.Run("returns an error for a nil reader", func(t *testing.T) {
+		store := NewEnvStore()
+
+		err := store.SetFromReader(nil, "reader.env", nil)
+		if err == nil {
+			t.Fatal("SetFromReader returned nil error for nil reader")
+		}
+		if err.Error() != "parse reader cannot be nil" {
+			t.Fatalf("SetFromReader error = %q, want %q", err.Error(), "parse reader cannot be nil")
+		}
+	})
+}
+
+func TestEnvStoreSetFromOsEnviron(t *testing.T) {
+	t.Run("respects allowlist denylist and overwrite=false", func(t *testing.T) {
+		allowedKey := testEnvKey(t, "allowed")
+		deniedKey := testEnvKey(t, "denied")
+		existingKey := testEnvKey(t, "existing")
+		equalsKey := testEnvKey(t, "equals")
+		filteredKey := testEnvKey(t, "filtered")
+
+		setTestEnv(t, allowedKey, "allowed-value")
+		setTestEnv(t, deniedKey, "denied-value")
+		setTestEnv(t, existingKey, "from-os")
+		setTestEnv(t, equalsKey, "left=right")
+		setTestEnv(t, filteredKey, "filtered-out")
+
+		store := EnvStore{
+			"UNCHANGED": "value",
+			existingKey: "from-store",
+		}
+
+		store.SetFromOsEnviron(keySet(allowedKey, deniedKey, existingKey, equalsKey), keySet(deniedKey), false)
+
+		assertStoreEqual(t, store, EnvStore{
+			"UNCHANGED": "value",
+			allowedKey:  "allowed-value",
+			existingKey: "from-store",
+			equalsKey:   "left=right",
+		})
+	})
+
+	t.Run("imports from os environment when allowlist is nil and overwrite=true", func(t *testing.T) {
+		importedKey := testEnvKey(t, "imported")
+		overwrittenKey := testEnvKey(t, "overwritten")
+		deniedKey := testEnvKey(t, "denied")
+
+		setTestEnv(t, importedKey, "from-os")
+		setTestEnv(t, overwrittenKey, "from-os")
+		setTestEnv(t, deniedKey, "blocked")
+
+		store := EnvStore{
+			overwrittenKey: "from-store",
+		}
+
+		store.SetFromOsEnviron(nil, keySet(deniedKey), true)
+
+		if got := store[importedKey]; got != "from-os" {
+			t.Fatalf("imported key = %q, want %q", got, "from-os")
+		}
+		if got := store[overwrittenKey]; got != "from-os" {
+			t.Fatalf("overwritten key = %q, want %q", got, "from-os")
+		}
+		if _, ok := store[deniedKey]; ok {
+			t.Fatalf("denied key %q should not be present in store", deniedKey)
+		}
+	})
+}
+
+func TestEnvStoreLoadIntoOsEnviron(t *testing.T) {
+	t.Run("loads missing values and respects filters without overwrite", func(t *testing.T) {
+		missingKey := testEnvKey(t, "missing")
+		existingKey := testEnvKey(t, "existing")
+		deniedKey := testEnvKey(t, "denied")
+		filteredKey := testEnvKey(t, "filtered")
+
+		unsetTestEnv(t, missingKey)
+		setTestEnv(t, existingKey, "from-os")
+		unsetTestEnv(t, deniedKey)
+		unsetTestEnv(t, filteredKey)
+
+		store := EnvStore{
+			missingKey:  "from-store",
+			existingKey: "from-store",
+			deniedKey:   "blocked",
+			filteredKey: "filtered-out",
+		}
+
+		store.LoadIntoOsEnviron(keySet(missingKey, existingKey, deniedKey), keySet(deniedKey), false)
+
+		assertEnvValue(t, missingKey, "from-store")
+		assertEnvValue(t, existingKey, "from-os")
+		assertEnvMissing(t, deniedKey)
+		assertEnvMissing(t, filteredKey)
+	})
+
+	t.Run("overwrites existing values when overwrite=true and allowlist is nil", func(t *testing.T) {
+		missingKey := testEnvKey(t, "missing")
+		existingKey := testEnvKey(t, "existing")
+		deniedKey := testEnvKey(t, "denied")
+
+		unsetTestEnv(t, missingKey)
+		setTestEnv(t, existingKey, "from-os")
+		unsetTestEnv(t, deniedKey)
+
+		store := EnvStore{
+			missingKey:  "from-store",
+			existingKey: "from-store",
+			deniedKey:   "blocked",
+		}
+
+		store.LoadIntoOsEnviron(nil, keySet(deniedKey), true)
+
+		assertEnvValue(t, missingKey, "from-store")
+		assertEnvValue(t, existingKey, "from-store")
+		assertEnvMissing(t, deniedKey)
+	})
+}
+
+func TestEnvStoreMerge(t *testing.T) {
+	t.Run("does not overwrite existing keys when overwrite is false", func(t *testing.T) {
+		store := EnvStore{"EXISTING": "keep"}
+		store.Merge(EnvStore{
+			"EXISTING": "replace",
+			"NEW":      "value",
+		}, false)
+
+		assertStoreEqual(t, store, EnvStore{
+			"EXISTING": "keep",
+			"NEW":      "value",
+		})
+	})
+
+	t.Run("overwrites existing keys when overwrite is true", func(t *testing.T) {
+		store := EnvStore{"EXISTING": "keep"}
+		store.Merge(EnvStore{
+			"EXISTING": "replace",
+			"NEW":      "value",
+		}, true)
+
+		assertStoreEqual(t, store, EnvStore{
+			"EXISTING": "replace",
+			"NEW":      "value",
+		})
+	})
+}
+
+func TestEnvStoreFilterKeys(t *testing.T) {
+	t.Run("keeps only allowlisted keys when denylist is nil", func(t *testing.T) {
+		store := EnvStore{
+			"KEEP": "value",
+			"DROP": "value",
+		}
+
+		store.FilterKeys(keySet("KEEP"), nil)
+		assertStoreEqual(t, store, EnvStore{"KEEP": "value"})
+	})
+
+	t.Run("removes only denylisted keys when allowlist is nil", func(t *testing.T) {
+		store := EnvStore{
+			"KEEP": "value",
+			"DROP": "value",
+		}
+
+		store.FilterKeys(nil, keySet("DROP"))
+		assertStoreEqual(t, store, EnvStore{"KEEP": "value"})
+	})
+
+	t.Run("denylist wins when a key appears in both filters", func(t *testing.T) {
+		store := EnvStore{
+			"KEEP": "value",
+			"BOTH": "value",
+			"DROP": "value",
+		}
+
+		store.FilterKeys(keySet("KEEP", "BOTH"), keySet("BOTH"))
+		assertStoreEqual(t, store, EnvStore{"KEEP": "value"})
+	})
+
+	t.Run("does nothing when both filters are nil", func(t *testing.T) {
+		store := EnvStore{
+			"KEEP": "value",
+			"DROP": "value",
+		}
+
+		store.FilterKeys(nil, nil)
+		assertStoreEqual(t, store, EnvStore{
+			"KEEP": "value",
+			"DROP": "value",
+		})
+	})
+}
+
+func writeDotEnvFile(t *testing.T, contents string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatalf("os.WriteFile: %v", err)
+	}
+
+	return path
+}
+
+func testEnvKey(t *testing.T, suffix string) string {
+	t.Helper()
+
+	name := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r - ('a' - 'A')
+		case r >= 'A' && r <= 'Z':
+			return r
+		case r >= '0' && r <= '9':
+			return r
+		default:
+			return '_'
+		}
+	}, t.Name())
+	return fmt.Sprintf("STRICT_DOTENV_%d_%s_%s", os.Getpid(), name, suffix)
+}
+
+func setTestEnv(t *testing.T, key, value string) {
+	t.Helper()
+
+	old, hadOld := os.LookupEnv(key)
+	if err := os.Setenv(key, value); err != nil {
+		t.Fatalf("os.Setenv(%q): %v", key, err)
+	}
+
+	t.Cleanup(func() {
+		if hadOld {
+			_ = os.Setenv(key, old)
+			return
+		}
+		_ = os.Unsetenv(key)
+	})
+}
+
+func unsetTestEnv(t *testing.T, key string) {
+	t.Helper()
+
+	old, hadOld := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatalf("os.Unsetenv(%q): %v", key, err)
+	}
+
+	t.Cleanup(func() {
+		if hadOld {
+			_ = os.Setenv(key, old)
+		}
+	})
+}
+
+func assertEnvValue(t *testing.T, key, want string) {
+	t.Helper()
+
+	got, ok := os.LookupEnv(key)
+	if !ok {
+		t.Fatalf("environment variable %q is not set", key)
+	}
+	if got != want {
+		t.Fatalf("environment variable %q = %q, want %q", key, got, want)
+	}
+}
+
+func assertEnvMissing(t *testing.T, key string) {
+	t.Helper()
+
+	if got, ok := os.LookupEnv(key); ok {
+		t.Fatalf("environment variable %q should be unset, got %q", key, got)
+	}
+}
+
+func keySet(keys ...string) map[string]struct{} {
+	set := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		set[key] = struct{}{}
+	}
+	return set
+}
+
+func assertStoreEqual(t *testing.T, got, want EnvStore) {
+	t.Helper()
+
+	if !maps.Equal(got, want) {
+		t.Fatalf("store mismatch\n got: %#v\nwant: %#v", got, want)
+	}
+}

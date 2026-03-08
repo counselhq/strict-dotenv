@@ -1,0 +1,175 @@
+package strictdotenv
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
+
+var (
+	ErrMissingRequiredKey = fmt.Errorf("EnvStore missing required key")
+)
+
+type EnvStore map[string]string
+
+// NewEnvStore makes a new EnvStore with an empty data map.
+func NewEnvStore() EnvStore {
+	return make(EnvStore, 16)
+}
+
+// Get retrieves a value from the store, returning an error if the key is required but not set.
+func (e EnvStore) Get(key string, required bool) (string, error) {
+	value, ok := e[key]
+
+	if required && !ok {
+		return "", fmt.Errorf("%w: %s", ErrMissingRequiredKey, key)
+	}
+
+	return value, nil
+}
+
+// Set sets a value in the store, optionally overwriting an existing value.
+func (e EnvStore) Set(key, value string, overwrite bool) {
+	if _, ok := e[key]; !ok || overwrite {
+		e[key] = value
+	}
+}
+
+// Merge the key-value pairs from another EnvStore into the current one, optionally overwriting existing values.
+func (e EnvStore) Merge(store EnvStore, overwrite bool) {
+	for k, v := range store {
+		e.Set(k, v, overwrite)
+	}
+}
+
+// SetFromDotEnv parses a dotenv file into the store using cfg.
+// A nil cfg is treated as an all-zero ParseConfig.
+func (e EnvStore) SetFromDotEnv(path string, cfg *ParseConfig) error {
+	return parseDotEnv(path, e, cfg)
+}
+
+// SetFromString parses dotenv contents from a string into the store using cfg.
+// A nil cfg is treated as an all-zero ParseConfig.
+func (e EnvStore) SetFromString(s, name string, cfg *ParseConfig) error {
+	return parseString(s, name, e, cfg)
+}
+
+// SetFromReader parses dotenv contents from an io.Reader into the store using cfg.
+// A nil cfg is treated as an all-zero ParseConfig.
+func (e EnvStore) SetFromReader(r io.Reader, name string, cfg *ParseConfig) error {
+	return parseReader(r, name, e, cfg)
+}
+
+// SetFromOsEnviron reads the current process environment variables and stores them in the EnvStore.
+func (e EnvStore) SetFromOsEnviron(allowlist, denylist map[string]struct{}, overwrite bool) {
+	for _, env := range os.Environ() {
+		parts := strings.SplitN(env, "=", 2)
+
+		if len(parts) != 2 {
+			continue
+		}
+
+		if allowlist != nil {
+			if _, ok := allowlist[parts[0]]; !ok {
+				continue
+			}
+		}
+
+		if denylist != nil {
+			if _, ok := denylist[parts[0]]; ok {
+				continue
+			}
+		}
+
+		e.Set(parts[0], parts[1], overwrite)
+	}
+}
+
+// LoadIntoOsEnviron loads the key-value pairs from the EnvStore into
+// the process environment variables, optionally overwriting existing values.
+func (e EnvStore) LoadIntoOsEnviron(allowlist, denylist map[string]struct{}, overwrite bool) {
+	for k, v := range e {
+
+		if allowlist != nil {
+			if _, ok := allowlist[k]; !ok {
+				continue
+			}
+		}
+
+		if denylist != nil {
+			if _, ok := denylist[k]; ok {
+				continue
+			}
+		}
+
+		if _, exists := os.LookupEnv(k); !exists || overwrite {
+			os.Setenv(k, v)
+		}
+	}
+}
+
+// FilterKeys removes any keys that are not in the allowlist, or that are in the denylist.
+// A nil allowlist keeps all keys. A nil denylist removes no keys.
+func (e EnvStore) FilterKeys(allowlist, denylist map[string]struct{}) {
+	for storeKey := range e {
+		if allowlist != nil {
+			if _, ok := allowlist[storeKey]; !ok {
+				delete(e, storeKey)
+				continue
+			}
+		}
+
+		if denylist != nil {
+			if _, ok := denylist[storeKey]; ok {
+				delete(e, storeKey)
+			}
+		}
+	}
+}
+
+// ProcessValue applies the double-quoted value transform pipeline to an
+// existing store value in place. The stored value is treated as the raw bytes
+// that would have appeared between double quotes in a dotenv file. If the key
+// is missing, ErrMissingRequiredKey is returned. A nil cfg is treated as an
+// all-zero ParseConfig. Overwrite is ignored.
+func (e EnvStore) ProcessValue(key string, cfg *ParseConfig) error {
+	value, err := e.Get(key, true)
+	if err != nil {
+		return err
+	}
+
+	processed, err := processValue([]byte(value), resolveParseOptions(cfg, key))
+	if err != nil {
+		return fmt.Errorf("%s: %w", key, err)
+	}
+
+	e[key] = processed
+	return nil
+}
+
+// ProcessValues applies the double-quoted value transform pipeline to every
+// value in the store. The ParseConfig is resolved the same way the parser uses
+// it: base settings apply to every key unless that key has explicit overrides.
+// A nil cfg is treated as an all-zero ParseConfig. Overwrite is ignored. If any
+// key fails to process, the store is left unchanged.
+func (e EnvStore) ProcessValues(cfg *ParseConfig) error {
+	keys := make([]string, len(e))
+	values := make([]string, len(e))
+
+	i := 0
+	for key, raw := range e {
+		value, err := processValue([]byte(raw), resolveParseOptions(cfg, key))
+		if err != nil {
+			return fmt.Errorf("%s: %w", key, err)
+		}
+		keys[i] = key
+		values[i] = value
+		i++
+	}
+
+	for i, key := range keys {
+		e[key] = values[i]
+	}
+	return nil
+}
