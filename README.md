@@ -59,7 +59,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	databaseURL, err := store.Get("DATABASE_URL", true)
+	databaseURL, err := store.GetRequired("DATABASE_URL")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -158,14 +158,15 @@ A few important points:
 
 ## Working With `EnvStore`
 
-`EnvStore` is a `map[string]string` with a few convenience methods layered on top. You can use it like a normal map, or you can use the helper methods when you want required-key checks, merges, or `os.Environ` integration.
+`EnvStore` is a `map[string]string` with a few convenience methods layered on top. You can use it like a normal map, or you can use the helper methods when you want map-style lookups, required-key checks, merges, or `os.Environ` integration.
 
 ### Common store methods
 
 | Method                                             | Purpose                                                                 | Notes                                                                                     |
 | -------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `NewEnvStore()`                                    | Create an empty store                                                   | Returns a writable `map[string]string`                                                    |
-| `Get(key, required)`                               | Read a value                                                            | If `required` is `true`, missing keys return `ErrMissingRequiredKey`                      |
+| `Get(key)`                                         | Read a value with map-style presence reporting                          | Returns `(value, ok)` so empty strings can be distinguished from missing keys             |
+| `GetRequired(key)`                                 | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                               |
 | `Set(key, value, overwrite)`                       | Write one value                                                         | `overwrite=false` keeps an existing value                                                 |
 | `Merge(other, overwrite)`                          | Merge another `EnvStore` into this one                                  | Same overwrite semantics as `Set`                          |
 | `ProcessValue(key, cfg)`                           | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
@@ -242,7 +243,7 @@ func main() {
 	}
 
 	// Do something with the store:
-	databaseURL, err := store.Get("DATABASE_URL", true)
+	databaseURL, err := store.GetRequired("DATABASE_URL")
 	if err != nil {
 		log.Fatal(err)
 	}

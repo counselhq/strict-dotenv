@@ -15,14 +15,19 @@ type EnvStore map[string]string
 
 // NewEnvStore makes a new EnvStore with an empty data map.
 func NewEnvStore() EnvStore {
-	return make(EnvStore, 16)
+	return make(EnvStore)
 }
 
-// Get retrieves a value from the store, returning an error if the key is required but not set.
-func (e EnvStore) Get(key string, required bool) (string, error) {
+// Get retrieves a value from the store and reports whether the key was set.
+func (e EnvStore) Get(key string) (string, bool) {
 	value, ok := e[key]
+	return value, ok
+}
 
-	if required && !ok {
+// GetRequired retrieves a value from the store, returning an error if the key is not set.
+func (e EnvStore) GetRequired(key string) (string, error) {
+	value, ok := e.Get(key)
+	if !ok {
 		return "", fmt.Errorf("%w: %s", ErrMissingRequiredKey, key)
 	}
 
@@ -134,7 +139,7 @@ func (e EnvStore) FilterKeys(allowlist, denylist map[string]struct{}) {
 // is missing, ErrMissingRequiredKey is returned. A nil cfg is treated as an
 // all-zero ParseConfig. Overwrite is ignored.
 func (e EnvStore) ProcessValue(key string, cfg *ParseConfig) error {
-	value, err := e.Get(key, true)
+	value, err := e.GetRequired(key)
 	if err != nil {
 		return err
 	}

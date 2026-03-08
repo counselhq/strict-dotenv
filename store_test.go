@@ -26,41 +26,68 @@ func TestNewEnvStore(t *testing.T) {
 }
 
 func TestEnvStoreGet(t *testing.T) {
-	store := EnvStore{"PRESENT": "value"}
+	store := EnvStore{
+		"PRESENT": "value",
+		"EMPTY":   "",
+	}
 
 	t.Run("returns existing value", func(t *testing.T) {
-		got, err := store.Get("PRESENT", true)
-		if err != nil {
-			t.Fatalf("Get returned unexpected error: %v", err)
+		got, ok := store.Get("PRESENT")
+		if !ok {
+			t.Fatal("Get reported PRESENT missing")
 		}
 		if got != "value" {
 			t.Fatalf("Get returned %q, want %q", got, "value")
 		}
 	})
 
-	t.Run("returns empty value for missing optional key", func(t *testing.T) {
-		got, err := store.Get("MISSING", false)
-		if err != nil {
-			t.Fatalf("Get returned unexpected error: %v", err)
+	t.Run("distinguishes empty values from missing keys", func(t *testing.T) {
+		got, ok := store.Get("EMPTY")
+		if !ok {
+			t.Fatal("Get reported EMPTY missing")
 		}
 		if got != "" {
 			t.Fatalf("Get returned %q, want empty string", got)
 		}
 	})
 
-	t.Run("returns wrapped error for missing required key", func(t *testing.T) {
-		got, err := store.Get("MISSING", true)
-		if err == nil {
-			t.Fatal("Get returned nil error for missing required key")
+	t.Run("returns false for missing key", func(t *testing.T) {
+		got, ok := store.Get("MISSING")
+		if ok {
+			t.Fatal("Get reported MISSING present")
 		}
 		if got != "" {
 			t.Fatalf("Get returned %q, want empty string", got)
 		}
+	})
+}
+
+func TestEnvStoreGetRequired(t *testing.T) {
+	store := EnvStore{"PRESENT": "value"}
+
+	t.Run("returns existing value", func(t *testing.T) {
+		got, err := store.GetRequired("PRESENT")
+		if err != nil {
+			t.Fatalf("GetRequired returned unexpected error: %v", err)
+		}
+		if got != "value" {
+			t.Fatalf("GetRequired returned %q, want %q", got, "value")
+		}
+	})
+
+	t.Run("returns wrapped error for missing required key", func(t *testing.T) {
+		got, err := store.GetRequired("MISSING")
+		if err == nil {
+			t.Fatal("GetRequired returned nil error for missing required key")
+		}
+		if got != "" {
+			t.Fatalf("GetRequired returned %q, want empty string", got)
+		}
 		if !errors.Is(err, ErrMissingRequiredKey) {
-			t.Fatalf("Get error = %v, want wrapped ErrMissingRequiredKey", err)
+			t.Fatalf("GetRequired error = %v, want wrapped ErrMissingRequiredKey", err)
 		}
 		if !strings.Contains(err.Error(), "MISSING") {
-			t.Fatalf("Get error = %q, want missing key name included", err.Error())
+			t.Fatalf("GetRequired error = %q, want missing key name included", err.Error())
 		}
 	})
 }
