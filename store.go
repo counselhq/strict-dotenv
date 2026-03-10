@@ -1,6 +1,7 @@
 package strictdotenv
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +9,7 @@ import (
 )
 
 var (
+	ErrMissingDotEnv      = fmt.Errorf("EnvStore missing dotenv file")
 	ErrMissingRequiredKey = fmt.Errorf("EnvStore missing required key")
 )
 
@@ -48,10 +50,34 @@ func (e EnvStore) Merge(store EnvStore, overwrite bool) {
 	}
 }
 
-// SetFromDotEnv parses a dotenv file into the store using cfg.
+// SetFromOptionalDotEnv parses a dotenv file into the store using cfg.
+// If the file does not exist, it returns nil without mutating the store.
 // A nil cfg is treated as an all-zero ParseConfig.
-func (e EnvStore) SetFromDotEnv(path string, cfg *ParseConfig) error {
-	return parseDotEnv(path, e, cfg)
+func (e EnvStore) SetFromOptionalDotEnv(path string, cfg *ParseConfig) error {
+	return e.setFromDotEnv(path, cfg, true)
+}
+
+// SetFromRequiredDotEnv parses a dotenv file into the store using cfg.
+// If the file does not exist, it returns ErrMissingDotEnv.
+// A nil cfg is treated as an all-zero ParseConfig.
+func (e EnvStore) SetFromRequiredDotEnv(path string, cfg *ParseConfig) error {
+	return e.setFromDotEnv(path, cfg, false)
+}
+
+func (e EnvStore) setFromDotEnv(path string, cfg *ParseConfig, optional bool) error {
+	err := parseDotEnv(path, e, cfg)
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, os.ErrNotExist) {
+		if optional {
+			return nil
+		}
+		return fmt.Errorf("%w: %s", ErrMissingDotEnv, path)
+	}
+
+	return err
 }
 
 // SetFromString parses dotenv contents from a string into the store using cfg.

@@ -55,7 +55,7 @@ func main() {
 	store := strictdotenv.NewEnvStore()
 	cfg := strictdotenv.NewParseConfig().WithRecommendedDefaults()
 
-	if err := store.SetFromDotEnv(".env", cfg); err != nil {
+	if err := store.SetFromRequiredDotEnv(".env", cfg); err != nil {
 		log.Fatal(err)
 	}
 
@@ -68,17 +68,18 @@ func main() {
 }
 ```
 
-The parse entry points take a `*ParseConfig`. Use `cfg := strictdotenv.NewParseConfig().WithRecommendedDefaults()` for the library defaults. Passing `nil` means an all-zero config; nothing falls back to the library defaults automatically.
+The parse entry points take a `*ParseConfig`. Use `cfg := strictdotenv.NewParseConfig().WithRecommendedDefaults()` for the library defaults. Passing `nil` means an all-zero config; nothing falls back to the library defaults automatically. If your dotenv file is optional, use `SetFromOptionalDotEnv`; if startup should fail when it is absent, use `SetFromRequiredDotEnv`.
 
 ## Store Parse Methods
 
-All parse methods write into the receiver `EnvStore` and return an error if parsing fails.
+All parse methods write into the receiver `EnvStore`. Parse failures return an error, and the file-based methods differ on missing-file handling as documented below.
 
 | Method                              | Use when                                       | Notes                                                                       |
 | ----------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
-| `store.SetFromDotEnv(path, cfg)`    | You have a dotenv file on disk or named pipe   | `path` is used to identify source in error messages; `nil` cfg means all-zero options      |
-| `store.SetFromString(s, name, cfg)` | You already have the dotenv contents in memory | `name` is used to identify source in error messages (default `"string"`); `nil` cfg means all-zero options    |
-| `store.SetFromReader(r, name, cfg)` | You want to parse from an `io.Reader`          | `name` is used to identify source in error messages (default `"io.Reader"`); `nil` cfg means all-zero options |
+| `store.SetFromOptionalDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe, but it is optional | Missing files are ignored; `path` is used in parser error messages; `nil` cfg means all-zero options |
+| `store.SetFromRequiredDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe and it must exist | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages; `nil` cfg means all-zero options |
+| `store.SetFromString(s, name, cfg)`      | You already have the dotenv contents in memory                   | `name` is used to identify source in error messages (default `"string"`); `nil` cfg means all-zero options |
+| `store.SetFromReader(r, name, cfg)`      | You want to parse from an `io.Reader`                            | `name` is used to identify source in error messages (default `"io.Reader"`); `nil` cfg means all-zero options |
 
 ## Parse Configuration
 
@@ -166,17 +167,18 @@ A few important points:
 | -------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `NewEnvStore()`                                    | Create an empty store                                                   | Returns a writable `map[string]string`                                                    |
 | `Get(key)`                                         | Read a value with map-style presence reporting                          | Returns `(value, ok)` so empty strings can be distinguished from missing keys             |
-| `GetRequired(key)`                                 | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                               |
-| `Set(key, value, overwrite)`                       | Write one value                                                         | `overwrite=false` keeps an existing value                                                 |
-| `Merge(other, overwrite)`                          | Merge another `EnvStore` into this one                                  | Same overwrite semantics as `Set`                          |
-| `ProcessValue(key, cfg)`                           | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
-| `ProcessValues(cfg)`                               | Reprocess every stored value using parser-style config resolution       | Applies base plus per-key options; leaves the store unchanged on error                    |
-| `SetFromDotEnv(path, cfg)`                         | Parse a dotenv file into the store                                      | `path` is used in error messages                                                          |
-| `SetFromString(s, name, cfg)`                      | Parse dotenv contents from a string into the store                      | If `name` is empty, errors use `"string"` as source name                                  |
-| `SetFromReader(r, name, cfg)`                      | Parse dotenv contents from an `io.Reader` into the store                | If `name` is empty, errors use `"io.Reader"` as source name                               |
-| `SetFromOsEnviron(allowlist, denylist, overwrite)` | Import from the current process environment                             | `allowlist` and `denylist` are `map[string]struct{}`                                      |
-| `LoadIntoOsEnviron(allowlist, denylist, overwrite)` | Export store values into the current process environment               | Existing OS values are preserved unless `overwrite` is `true`                             |
-| `FilterKeys(allowlist, denylist)`                  | Remove keys that fail the combined filters                              | `nil` allowlist keeps all; `nil` denylist removes none; denylist wins on overlap          |
+| `GetRequired(key)`                                      | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                                   |
+| `Set(key, value, overwrite)`                            | Write one value                                                         | `overwrite=false` keeps an existing value                                                     |
+| `Merge(other, overwrite)`                               | Merge another `EnvStore` into this one                                  | Same overwrite semantics as `Set`                                                              |
+| `ProcessValue(key, cfg)`                                | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
+| `ProcessValues(cfg)`                                    | Reprocess every stored value using parser-style config resolution       | Applies base plus per-key options; leaves the store unchanged on error                        |
+| `SetFromOptionalDotEnv(path, cfg)`                      | Parse an optional dotenv file into the store                            | Missing files are ignored; `path` is used in parser error messages                            |
+| `SetFromRequiredDotEnv(path, cfg)`                      | Parse a required dotenv file into the store                             | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages             |
+| `SetFromString(s, name, cfg)`                           | Parse dotenv contents from a string into the store                      | If `name` is empty, errors use `"string"` as source name                                      |
+| `SetFromReader(r, name, cfg)`                           | Parse dotenv contents from an `io.Reader` into the store                | If `name` is empty, errors use `"io.Reader"` as source name                                   |
+| `SetFromOsEnviron(allowlist, denylist, overwrite)`      | Import from the current process environment                             | `allowlist` and `denylist` are `map[string]struct{}`                                          |
+| `LoadIntoOsEnviron(allowlist, denylist, overwrite)`     | Export store values into the current process environment                | Existing OS values are preserved unless `overwrite` is `true`                                 |
+| `FilterKeys(allowlist, denylist)`                       | Remove keys that fail the combined filters                              | `nil` allowlist keeps all; `nil` denylist removes none; denylist wins on overlap              |
 
 ### Reprocess existing store values
 
@@ -238,7 +240,7 @@ func main() {
 
 	store.SetFromOsEnviron(nil, nil, false)
 
-	if err := store.SetFromDotEnv(".env", cfg); err != nil {
+	if err := store.SetFromOptionalDotEnv(".env", cfg); err != nil {
 		log.Fatal(err)
 	}
 
@@ -273,7 +275,7 @@ func main() {
 	store := strictdotenv.NewEnvStore()
 	cfg := strictdotenv.NewParseConfig().WithRecommendedDefaults()
 
-	if err := store.SetFromDotEnv(".env", cfg); err != nil {
+	if err := store.SetFromRequiredDotEnv(".env", cfg); err != nil {
 		log.Fatal(err)
 	}
 
@@ -291,7 +293,7 @@ Parse errors include the source name and line number. For example:
 config.env:12: expected closing double quote
 ```
 
-For `SetFromString` and `SetFromReader`, the `name` argument is what appears in the error prefix.
+For `SetFromString` and `SetFromReader`, the `name` argument is what appears in the error prefix. `SetFromRequiredDotEnv` returns a wrapped `ErrMissingDotEnv` when the file does not exist; `SetFromOptionalDotEnv` treats that case as a no-op.
 
 ## Parsing Rules
 

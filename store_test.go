@@ -245,13 +245,13 @@ func TestEnvStoreProcessValues(t *testing.T) {
 	})
 }
 
-func TestEnvStoreSetFromDotEnv(t *testing.T) {
+func TestEnvStoreSetFromOptionalDotEnv(t *testing.T) {
 	t.Run("nil config uses zero-value options and preserves existing entries by default", func(t *testing.T) {
 		store := EnvStore{"EXISTING": "keep"}
 		path := writeDotEnvFile(t, "EXISTING=replace\nNEW=\"line1\\nline2\"\n")
 
-		if err := store.SetFromDotEnv(path, nil); err != nil {
-			t.Fatalf("SetFromDotEnv returned unexpected error: %v", err)
+		if err := store.SetFromOptionalDotEnv(path, nil); err != nil {
+			t.Fatalf("SetFromOptionalDotEnv returned unexpected error: %v", err)
 		}
 
 		assertStoreEqual(t, store, EnvStore{
@@ -260,13 +260,39 @@ func TestEnvStoreSetFromDotEnv(t *testing.T) {
 		})
 	})
 
+	t.Run("returns parser errors", func(t *testing.T) {
+		store := NewEnvStore()
+		path := writeDotEnvFile(t, "INVALID LINE")
+
+		err := store.SetFromOptionalDotEnv(path, nil)
+		if err == nil {
+			t.Fatal("SetFromOptionalDotEnv returned nil error for invalid dotenv file")
+		}
+		if !strings.Contains(err.Error(), filepath.Base(path)+":1:") {
+			t.Fatalf("SetFromOptionalDotEnv error = %q, want file name and line number", err.Error())
+		}
+	})
+
+	t.Run("is a no-op when the dotenv file is missing", func(t *testing.T) {
+		store := EnvStore{"EXISTING": "keep"}
+		path := filepath.Join(t.TempDir(), "missing.env")
+
+		if err := store.SetFromOptionalDotEnv(path, nil); err != nil {
+			t.Fatalf("SetFromOptionalDotEnv returned unexpected error for missing file: %v", err)
+		}
+
+		assertStoreEqual(t, store, EnvStore{"EXISTING": "keep"})
+	})
+}
+
+func TestEnvStoreSetFromRequiredDotEnv(t *testing.T) {
 	t.Run("honors parse config overwrite", func(t *testing.T) {
 		store := EnvStore{"EXISTING": "keep"}
 		path := writeDotEnvFile(t, "EXISTING=replace\nNEW=value\n")
 		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)})
 
-		if err := store.SetFromDotEnv(path, cfg); err != nil {
-			t.Fatalf("SetFromDotEnv returned unexpected error: %v", err)
+		if err := store.SetFromRequiredDotEnv(path, cfg); err != nil {
+			t.Fatalf("SetFromRequiredDotEnv returned unexpected error: %v", err)
 		}
 
 		assertStoreEqual(t, store, EnvStore{
@@ -279,13 +305,31 @@ func TestEnvStoreSetFromDotEnv(t *testing.T) {
 		store := NewEnvStore()
 		path := writeDotEnvFile(t, "INVALID LINE")
 
-		err := store.SetFromDotEnv(path, nil)
+		err := store.SetFromRequiredDotEnv(path, nil)
 		if err == nil {
-			t.Fatal("SetFromDotEnv returned nil error for invalid dotenv file")
+			t.Fatal("SetFromRequiredDotEnv returned nil error for invalid dotenv file")
 		}
 		if !strings.Contains(err.Error(), filepath.Base(path)+":1:") {
-			t.Fatalf("SetFromDotEnv error = %q, want file name and line number", err.Error())
+			t.Fatalf("SetFromRequiredDotEnv error = %q, want file name and line number", err.Error())
 		}
+	})
+
+	t.Run("returns ErrMissingDotEnv when the dotenv file is missing", func(t *testing.T) {
+		store := EnvStore{"EXISTING": "keep"}
+		path := filepath.Join(t.TempDir(), "missing.env")
+
+		err := store.SetFromRequiredDotEnv(path, nil)
+		if err == nil {
+			t.Fatal("SetFromRequiredDotEnv returned nil error for missing dotenv file")
+		}
+		if !errors.Is(err, ErrMissingDotEnv) {
+			t.Fatalf("SetFromRequiredDotEnv error = %v, want wrapped ErrMissingDotEnv", err)
+		}
+		if !strings.Contains(err.Error(), path) {
+			t.Fatalf("SetFromRequiredDotEnv error = %q, want missing path included", err.Error())
+		}
+
+		assertStoreEqual(t, store, EnvStore{"EXISTING": "keep"})
 	})
 }
 
