@@ -11,13 +11,13 @@ func testdataPath(name string) string {
 	return filepath.Join(filepath.Dir(f), "testdata", name)
 }
 
-func BenchmarkEnvStoreSetFromDotEnv(b *testing.B) {
+func BenchmarkEnvStoreSetFromRequiredDotEnv(b *testing.B) {
 	pathBenchmark1 := testdataPath(".env.benchmark1")
 
 	// verify the file parses without error before benchmarking
 	store := NewEnvStore()
 	cfg := NewParseConfig().WithRecommendedDefaults()
-	if err := store.SetFromDotEnv(pathBenchmark1, cfg); err != nil {
+	if err := store.SetFromRequiredDotEnv(pathBenchmark1, cfg); err != nil {
 		b.Fatalf("setup: %v", err)
 	}
 
@@ -26,7 +26,7 @@ func BenchmarkEnvStoreSetFromDotEnv(b *testing.B) {
 
 	for b.Loop() {
 		s := NewEnvStore()
-		if err := s.SetFromDotEnv(pathBenchmark1, cfg); err != nil {
+		if err := s.SetFromRequiredDotEnv(pathBenchmark1, cfg); err != nil {
 			b.Fatal(err)
 		}
 	}
