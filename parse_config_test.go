@@ -21,7 +21,7 @@ func TestNewParseConfigReturnsEmptyConfig(t *testing.T) {
 
 func TestWithRecommendedDefaultsAppliesDefaults(t *testing.T) {
 	cfg := NewParseConfig().
-		WithBaseOptions(&CustomParseOptions{UnescapeBackslashN: BoolPtr(false)}).
+		WithBaseOptions(&CustomParseOptions{UnescapeBackslashN: new(false)}).
 		WithRecommendedDefaults()
 	want := resolveCustom(&defaultParseOptions)
 
@@ -35,8 +35,8 @@ func TestWithRecommendedDefaultsAppliesDefaults(t *testing.T) {
 
 func TestWithBaseOptionsLeavesUnsetFieldsUntouched(t *testing.T) {
 	cfg := NewParseConfig().WithBaseOptions(&CustomParseOptions{
-		Overwrite:          BoolPtr(true),
-		UnescapeBackslashN: BoolPtr(true),
+		Overwrite:          new(true),
+		UnescapeBackslashN: new(true),
 	})
 
 	if !cfg.ParseOptions.Overwrite {
@@ -56,8 +56,8 @@ func TestWithBaseOptionsLeavesUnsetFieldsUntouched(t *testing.T) {
 
 func TestWithBaseOptionsAfterRecommendedDefaultsPreservesExistingValues(t *testing.T) {
 	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
-		Overwrite:          BoolPtr(true),
-		UnescapeBackslashN: BoolPtr(false),
+		Overwrite:          new(true),
+		UnescapeBackslashN: new(false),
 	})
 
 	if !cfg.ParseOptions.Overwrite {
@@ -80,9 +80,9 @@ func TestWithBaseOptionsAfterRecommendedDefaultsPreservesExistingValues(t *testi
 
 func TestWithKeyOptionsInheritsRecommendedBase(t *testing.T) {
 	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
-		Overwrite: BoolPtr(true),
+		Overwrite: new(true),
 	}).WithKeyOptions("SECRET", &CustomParseOptions{
-		UnescapeBackslashN: BoolPtr(false),
+		UnescapeBackslashN: new(false),
 	})
 
 	keyOpts := cfg.KeyOptions["SECRET"]
@@ -103,7 +103,7 @@ func TestWithKeyOptionsInheritsRecommendedBase(t *testing.T) {
 
 func TestWithKeyOptionsInheritsUntouchedBase(t *testing.T) {
 	cfg := NewParseConfig().WithKeyOptions("SECRET", &CustomParseOptions{
-		UnescapeBackslashN: BoolPtr(true),
+		UnescapeBackslashN: new(true),
 	})
 
 	keyOpts := cfg.KeyOptions["SECRET"]
@@ -118,8 +118,8 @@ func TestWithKeyOptionsInheritsUntouchedBase(t *testing.T) {
 
 func TestWithKeyOptionsChaining(t *testing.T) {
 	cfg := NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("A", &CustomParseOptions{Overwrite: BoolPtr(true)}).
-		WithKeyOptions("B", &CustomParseOptions{UnescapeBackslashN: BoolPtr(false)})
+		WithKeyOptions("A", &CustomParseOptions{Overwrite: new(true)}).
+		WithKeyOptions("B", &CustomParseOptions{UnescapeBackslashN: new(false)})
 
 	if !cfg.KeyOptions["A"].Overwrite {
 		t.Error("expected A Overwrite=true")
@@ -134,7 +134,7 @@ func TestWithKeyOptionsChaining(t *testing.T) {
 }
 
 func TestWithKeyOptionsNilOverridesUsesBase(t *testing.T) {
-	base := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)})
+	base := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: new(true)})
 	cfg := base.WithKeyOptions("KEY", nil)
 
 	if cfg.KeyOptions["KEY"] != base.ParseOptions {
@@ -169,7 +169,7 @@ func TestConfigOptionsOverwrite(t *testing.T) {
 		want:   EnvStore{"KEY": "1"},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(false)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Overwrite: false (same as default) - repeated keys first one wins",
@@ -177,7 +177,7 @@ func TestConfigOptionsOverwrite(t *testing.T) {
 		want:   EnvStore{"KEY": "1"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Overwrite: true - repeated keys last one wins",
@@ -186,7 +186,7 @@ func TestConfigOptionsOverwrite(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{Overwrite: BoolPtr(true)})
+		WithKeyOptions("KEY", &CustomParseOptions{Overwrite: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific Overwrite",
@@ -194,8 +194,8 @@ func TestConfigOptionsOverwrite(t *testing.T) {
 		want:   EnvStore{"KEY": "2", "OTHER": "3"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)}).
-		WithKeyOptions("KEY", &CustomParseOptions{Overwrite: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: new(true)}).
+		WithKeyOptions("KEY", &CustomParseOptions{Overwrite: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base overwrite settings",
@@ -204,8 +204,8 @@ func TestConfigOptionsOverwrite(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{Overwrite: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{Overwrite: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{Overwrite: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{Overwrite: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific overwrite settings",
@@ -232,7 +232,7 @@ func TestConfigOptionsUnescapeBackslashBackslash(t *testing.T) {
 		want:   EnvStore{"KEY": `a\b`},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashBackslash: BoolPtr(true)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashBackslash: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashBackslash: true (same as default) - escaped backslash is unescaped",
@@ -240,7 +240,7 @@ func TestConfigOptionsUnescapeBackslashBackslash(t *testing.T) {
 		want:   EnvStore{"KEY": `a\b`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashBackslash: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashBackslash: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashBackslash: false - escaped backslash is preserved",
@@ -249,7 +249,7 @@ func TestConfigOptionsUnescapeBackslashBackslash(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashBackslash: BoolPtr(false)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashBackslash: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashBackslash",
@@ -257,8 +257,8 @@ func TestConfigOptionsUnescapeBackslashBackslash(t *testing.T) {
 		want:   EnvStore{"KEY": `a\\b`, "OTHER": `c\d`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashBackslash: BoolPtr(false)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashBackslash: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashBackslash: new(false)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashBackslash: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashBackslash settings",
@@ -267,8 +267,8 @@ func TestConfigOptionsUnescapeBackslashBackslash(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashBackslash: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashBackslash: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashBackslash: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashBackslash: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashBackslash settings",
@@ -295,7 +295,7 @@ func TestConfigOptionsUnescapeBackslashDoubleQuote(t *testing.T) {
 		want:   EnvStore{"KEY": `a"b`},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashDoubleQuote: BoolPtr(true)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashDoubleQuote: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashDoubleQuote: true (same as default) - escaped double quote is unescaped",
@@ -303,7 +303,7 @@ func TestConfigOptionsUnescapeBackslashDoubleQuote(t *testing.T) {
 		want:   EnvStore{"KEY": `a"b`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashDoubleQuote: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashDoubleQuote: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashDoubleQuote: false - escaped double quote is preserved",
@@ -312,7 +312,7 @@ func TestConfigOptionsUnescapeBackslashDoubleQuote(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashDoubleQuote: BoolPtr(false)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashDoubleQuote: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashDoubleQuote",
@@ -320,8 +320,8 @@ func TestConfigOptionsUnescapeBackslashDoubleQuote(t *testing.T) {
 		want:   EnvStore{"KEY": `a\"b`, "OTHER": `c"d`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashDoubleQuote: BoolPtr(false)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashDoubleQuote: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashDoubleQuote: new(false)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashDoubleQuote: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashDoubleQuote settings",
@@ -330,8 +330,8 @@ func TestConfigOptionsUnescapeBackslashDoubleQuote(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashDoubleQuote: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashDoubleQuote: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashDoubleQuote: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashDoubleQuote: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashDoubleQuote settings",
@@ -358,7 +358,7 @@ func TestConfigOptionsUnescapeBackslashSingleQuote(t *testing.T) {
 		want:   EnvStore{"KEY": `a\'b`},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashSingleQuote: BoolPtr(false)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashSingleQuote: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashSingleQuote: false (same as default) - escaped single quote is preserved",
@@ -366,7 +366,7 @@ func TestConfigOptionsUnescapeBackslashSingleQuote(t *testing.T) {
 		want:   EnvStore{"KEY": `a\'b`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashSingleQuote: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashSingleQuote: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashSingleQuote: true - escaped single quote is unescaped",
@@ -375,7 +375,7 @@ func TestConfigOptionsUnescapeBackslashSingleQuote(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashSingleQuote: BoolPtr(true)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashSingleQuote: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashSingleQuote",
@@ -383,8 +383,8 @@ func TestConfigOptionsUnescapeBackslashSingleQuote(t *testing.T) {
 		want:   EnvStore{"KEY": "a'b", "OTHER": `c\'d`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashSingleQuote: BoolPtr(true)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashSingleQuote: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashSingleQuote: new(true)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashSingleQuote: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashSingleQuote settings",
@@ -393,8 +393,8 @@ func TestConfigOptionsUnescapeBackslashSingleQuote(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashSingleQuote: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashSingleQuote: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashSingleQuote: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashSingleQuote: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashSingleQuote settings",
@@ -421,7 +421,7 @@ func TestConfigOptionsUnescapeBackslashA(t *testing.T) {
 		want:   EnvStore{"KEY": `a\ab`},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashA: BoolPtr(false)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashA: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashA: false (same as default) - escaped alert is preserved",
@@ -429,7 +429,7 @@ func TestConfigOptionsUnescapeBackslashA(t *testing.T) {
 		want:   EnvStore{"KEY": `a\ab`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashA: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashA: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashA: true - escaped alert is unescaped",
@@ -438,7 +438,7 @@ func TestConfigOptionsUnescapeBackslashA(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashA: BoolPtr(true)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashA: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashA",
@@ -446,8 +446,8 @@ func TestConfigOptionsUnescapeBackslashA(t *testing.T) {
 		want:   EnvStore{"KEY": "a\ab", "OTHER": `c\ad`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashA: BoolPtr(true)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashA: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashA: new(true)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashA: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashA settings",
@@ -456,8 +456,8 @@ func TestConfigOptionsUnescapeBackslashA(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashA: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashA: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashA: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashA: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashA settings",
@@ -484,7 +484,7 @@ func TestConfigOptionsUnescapeBackslashB(t *testing.T) {
 		want:   EnvStore{"KEY": `a\bb`},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashB: BoolPtr(false)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashB: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashB: false (same as default) - escaped backspace is preserved",
@@ -492,7 +492,7 @@ func TestConfigOptionsUnescapeBackslashB(t *testing.T) {
 		want:   EnvStore{"KEY": `a\bb`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashB: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashB: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashB: true - escaped backspace is unescaped",
@@ -501,7 +501,7 @@ func TestConfigOptionsUnescapeBackslashB(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashB: BoolPtr(true)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashB: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashB",
@@ -509,8 +509,8 @@ func TestConfigOptionsUnescapeBackslashB(t *testing.T) {
 		want:   EnvStore{"KEY": "a\bb", "OTHER": `c\bd`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashB: BoolPtr(true)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashB: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashB: new(true)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashB: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashB settings",
@@ -519,8 +519,8 @@ func TestConfigOptionsUnescapeBackslashB(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashB: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashB: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashB: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashB: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashB settings",
@@ -547,7 +547,7 @@ func TestConfigOptionsUnescapeBackslashF(t *testing.T) {
 		want:   EnvStore{"KEY": `a\fb`},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashF: BoolPtr(false)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashF: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashF: false (same as default) - escaped form feed is preserved",
@@ -555,7 +555,7 @@ func TestConfigOptionsUnescapeBackslashF(t *testing.T) {
 		want:   EnvStore{"KEY": `a\fb`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashF: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashF: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashF: true - escaped form feed is unescaped",
@@ -564,7 +564,7 @@ func TestConfigOptionsUnescapeBackslashF(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashF: BoolPtr(true)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashF: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashF",
@@ -572,8 +572,8 @@ func TestConfigOptionsUnescapeBackslashF(t *testing.T) {
 		want:   EnvStore{"KEY": "a\fb", "OTHER": `c\fd`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashF: BoolPtr(true)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashF: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashF: new(true)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashF: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashF settings",
@@ -582,8 +582,8 @@ func TestConfigOptionsUnescapeBackslashF(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashF: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashF: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashF: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashF: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashF settings",
@@ -610,7 +610,7 @@ func TestConfigOptionsUnescapeBackslashN(t *testing.T) {
 		want:   EnvStore{"KEY": "a\nb"},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashN: BoolPtr(true)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashN: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashN: true (same as default) - escaped newline is unescaped",
@@ -618,7 +618,7 @@ func TestConfigOptionsUnescapeBackslashN(t *testing.T) {
 		want:   EnvStore{"KEY": "a\nb"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashN: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashN: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashN: false - escaped newline is preserved",
@@ -627,7 +627,7 @@ func TestConfigOptionsUnescapeBackslashN(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashN: BoolPtr(false)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashN: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashN",
@@ -635,8 +635,8 @@ func TestConfigOptionsUnescapeBackslashN(t *testing.T) {
 		want:   EnvStore{"KEY": `a\nb`, "OTHER": "c\nd"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashN: BoolPtr(false)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashN: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashN: new(false)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashN: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashN settings",
@@ -645,8 +645,8 @@ func TestConfigOptionsUnescapeBackslashN(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashN: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashN: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashN: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashN: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashN settings",
@@ -673,7 +673,7 @@ func TestConfigOptionsUnescapeBackslashR(t *testing.T) {
 		want:   EnvStore{"KEY": "a\nb"},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashR: BoolPtr(true)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashR: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashR: true (same as default) - escaped carriage return is unescaped and normalized",
@@ -681,7 +681,7 @@ func TestConfigOptionsUnescapeBackslashR(t *testing.T) {
 		want:   EnvStore{"KEY": "a\nb"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashR: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashR: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashR: false - escaped carriage return is preserved",
@@ -690,7 +690,7 @@ func TestConfigOptionsUnescapeBackslashR(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashR: BoolPtr(false)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashR: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashR",
@@ -698,8 +698,8 @@ func TestConfigOptionsUnescapeBackslashR(t *testing.T) {
 		want:   EnvStore{"KEY": `a\rb`, "OTHER": "c\nd"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashR: BoolPtr(false)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashR: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashR: new(false)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashR: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashR settings",
@@ -708,8 +708,8 @@ func TestConfigOptionsUnescapeBackslashR(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashR: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashR: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashR: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashR: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashR settings",
@@ -736,7 +736,7 @@ func TestConfigOptionsUnescapeBackslashT(t *testing.T) {
 		want:   EnvStore{"KEY": "a\tb"},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashT: BoolPtr(true)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashT: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashT: true (same as default) - escaped tab is unescaped",
@@ -744,7 +744,7 @@ func TestConfigOptionsUnescapeBackslashT(t *testing.T) {
 		want:   EnvStore{"KEY": "a\tb"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashT: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashT: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashT: false - escaped tab is preserved",
@@ -753,7 +753,7 @@ func TestConfigOptionsUnescapeBackslashT(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashT: BoolPtr(false)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashT: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashT",
@@ -761,8 +761,8 @@ func TestConfigOptionsUnescapeBackslashT(t *testing.T) {
 		want:   EnvStore{"KEY": `a\tb`, "OTHER": "c\td"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashT: BoolPtr(false)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashT: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashT: new(false)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashT: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashT settings",
@@ -771,8 +771,8 @@ func TestConfigOptionsUnescapeBackslashT(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashT: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashT: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashT: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashT: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashT settings",
@@ -799,7 +799,7 @@ func TestConfigOptionsUnescapeBackslashV(t *testing.T) {
 		want:   EnvStore{"KEY": `a\vb`},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashV: BoolPtr(false)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashV: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashV: false (same as default) - escaped vertical tab is preserved",
@@ -807,7 +807,7 @@ func TestConfigOptionsUnescapeBackslashV(t *testing.T) {
 		want:   EnvStore{"KEY": `a\vb`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashV: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashV: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "UnescapeBackslashV: true - escaped vertical tab is unescaped",
@@ -816,7 +816,7 @@ func TestConfigOptionsUnescapeBackslashV(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashV: BoolPtr(true)})
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashV: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific UnescapeBackslashV",
@@ -824,8 +824,8 @@ func TestConfigOptionsUnescapeBackslashV(t *testing.T) {
 		want:   EnvStore{"KEY": "a\vb", "OTHER": `c\vd`},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashV: BoolPtr(true)}).
-		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashV: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{UnescapeBackslashV: new(true)}).
+		WithKeyOptions("KEY", &CustomParseOptions{UnescapeBackslashV: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base UnescapeBackslashV settings",
@@ -834,8 +834,8 @@ func TestConfigOptionsUnescapeBackslashV(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashV: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashV: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{UnescapeBackslashV: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{UnescapeBackslashV: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific UnescapeBackslashV settings",
@@ -862,7 +862,7 @@ func TestConfigOptionsTransformCRLFToLF(t *testing.T) {
 		want:   EnvStore{"KEY": "a\nb"},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRLFToLF: BoolPtr(true)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRLFToLF: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "TransformCRLFToLF: true (same as default) - CRLF is normalized to a single LF",
@@ -870,7 +870,7 @@ func TestConfigOptionsTransformCRLFToLF(t *testing.T) {
 		want:   EnvStore{"KEY": "a\nb"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRLFToLF: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRLFToLF: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "TransformCRLFToLF: false - CRLF expands to two LFs when CR transform is enabled",
@@ -879,7 +879,7 @@ func TestConfigOptionsTransformCRLFToLF(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{TransformCRLFToLF: BoolPtr(false)})
+		WithKeyOptions("KEY", &CustomParseOptions{TransformCRLFToLF: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific TransformCRLFToLF",
@@ -887,8 +887,8 @@ func TestConfigOptionsTransformCRLFToLF(t *testing.T) {
 		want:   EnvStore{"KEY": "a\n\nb", "OTHER": "c\nd"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRLFToLF: BoolPtr(false)}).
-		WithKeyOptions("KEY", &CustomParseOptions{TransformCRLFToLF: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRLFToLF: new(false)}).
+		WithKeyOptions("KEY", &CustomParseOptions{TransformCRLFToLF: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base TransformCRLFToLF settings",
@@ -897,8 +897,8 @@ func TestConfigOptionsTransformCRLFToLF(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{TransformCRLFToLF: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{TransformCRLFToLF: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{TransformCRLFToLF: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{TransformCRLFToLF: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific TransformCRLFToLF settings",
@@ -925,7 +925,7 @@ func TestConfigOptionsTransformCRToLF(t *testing.T) {
 		want:   EnvStore{"KEY": "a\nb"},
 	})
 
-	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRToLF: BoolPtr(true)})
+	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRToLF: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "TransformCRToLF: true (same as default) - CR is normalized to LF",
@@ -933,7 +933,7 @@ func TestConfigOptionsTransformCRToLF(t *testing.T) {
 		want:   EnvStore{"KEY": "a\nb"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRToLF: BoolPtr(false)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRToLF: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "TransformCRToLF: false - CR is preserved",
@@ -942,7 +942,7 @@ func TestConfigOptionsTransformCRToLF(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("KEY", &CustomParseOptions{TransformCRToLF: BoolPtr(false)})
+		WithKeyOptions("KEY", &CustomParseOptions{TransformCRToLF: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Key-specific TransformCRToLF",
@@ -950,8 +950,8 @@ func TestConfigOptionsTransformCRToLF(t *testing.T) {
 		want:   EnvStore{"KEY": "a\rb", "OTHER": "c\nd"},
 	})
 
-	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRToLF: BoolPtr(false)}).
-		WithKeyOptions("KEY", &CustomParseOptions{TransformCRToLF: BoolPtr(true)})
+	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{TransformCRToLF: new(false)}).
+		WithKeyOptions("KEY", &CustomParseOptions{TransformCRToLF: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "Obey different key-specific and base TransformCRToLF settings",
@@ -960,8 +960,8 @@ func TestConfigOptionsTransformCRToLF(t *testing.T) {
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().
-		WithKeyOptions("T", &CustomParseOptions{TransformCRToLF: BoolPtr(true)}).
-		WithKeyOptions("F", &CustomParseOptions{TransformCRToLF: BoolPtr(false)})
+		WithKeyOptions("T", &CustomParseOptions{TransformCRToLF: new(true)}).
+		WithKeyOptions("F", &CustomParseOptions{TransformCRToLF: new(false)})
 
 	run(t, nil, cfg, testCase{
 		name:   "obey different key-specific TransformCRToLF settings",
@@ -976,8 +976,8 @@ func TestConfigOptionsTransformCRToLF(t *testing.T) {
 
 func TestConfigOptionsTransformCRLFToLFAndTransformCRToLFInteractions(t *testing.T) {
 	cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
-		TransformCRLFToLF: BoolPtr(false),
-		TransformCRToLF:   BoolPtr(false),
+		TransformCRLFToLF: new(false),
+		TransformCRToLF:   new(false),
 	})
 
 	run(t, nil, cfg, testCase{
@@ -987,10 +987,10 @@ func TestConfigOptionsTransformCRLFToLFAndTransformCRToLFInteractions(t *testing
 	})
 
 	cfg = NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
-		UnescapeBackslashN: BoolPtr(false),
-		UnescapeBackslashR: BoolPtr(false),
-		TransformCRLFToLF:  BoolPtr(false),
-		TransformCRToLF:    BoolPtr(false),
+		UnescapeBackslashN: new(false),
+		UnescapeBackslashR: new(false),
+		TransformCRLFToLF:  new(false),
+		TransformCRToLF:    new(false),
 	})
 
 	run(t, nil, cfg, testCase{

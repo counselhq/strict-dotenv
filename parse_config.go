@@ -18,10 +18,10 @@ package strictdotenv
 //	cfg := NewParseConfig() // all zero values
 //	cfg := NewParseConfig().
 //		WithRecommendedDefaults().
-//		WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)})
+//		WithBaseOptions(&CustomParseOptions{Overwrite: new(true)})
 //	cfg := NewParseConfig().
 //		WithRecommendedDefaults().
-//		WithKeyOptions("SECRET", &CustomParseOptions{UnescapeBackslashN: BoolPtr(false)})
+//		WithKeyOptions("SECRET", &CustomParseOptions{UnescapeBackslashN: new(false)})
 type ParseConfig struct {
 	ParseOptions ParseOptions
 	KeyOptions   map[string]ParseOptions
@@ -72,24 +72,20 @@ type CustomParseOptions struct {
 // defaults. Use ParseConfig.WithRecommendedDefaults to copy them into a
 // config before applying additional overrides.
 var defaultParseOptions = CustomParseOptions{
-	Overwrite:                    BoolPtr(false),
-	UnescapeBackslashBackslash:   BoolPtr(true),
-	UnescapeBackslashDoubleQuote: BoolPtr(true),
-	UnescapeBackslashSingleQuote: BoolPtr(false),
-	UnescapeBackslashA:           BoolPtr(false),
-	UnescapeBackslashB:           BoolPtr(false),
-	UnescapeBackslashF:           BoolPtr(false),
-	UnescapeBackslashN:           BoolPtr(true),
-	UnescapeBackslashR:           BoolPtr(true),
-	UnescapeBackslashT:           BoolPtr(true),
-	UnescapeBackslashV:           BoolPtr(false),
-	TransformCRLFToLF:            BoolPtr(true),
-	TransformCRToLF:              BoolPtr(true),
+	Overwrite:                    new(false),
+	UnescapeBackslashBackslash:   new(true),
+	UnescapeBackslashDoubleQuote: new(true),
+	UnescapeBackslashSingleQuote: new(false),
+	UnescapeBackslashA:           new(false),
+	UnescapeBackslashB:           new(false),
+	UnescapeBackslashF:           new(false),
+	UnescapeBackslashN:           new(true),
+	UnescapeBackslashR:           new(true),
+	UnescapeBackslashT:           new(true),
+	UnescapeBackslashV:           new(false),
+	TransformCRLFToLF:            new(true),
+	TransformCRToLF:              new(true),
 }
-
-// BoolPtr is a helper for easily constructing *bool values from bool literals.
-// Remove in favor of new(false) | new(true) when library requires Go 1.26+.
-func BoolPtr(b bool) *bool { return &b }
 
 // resolveCustom converts a fully-populated CustomParseOptions to ParseOptions.
 func resolveCustom(c *CustomParseOptions) ParseOptions {
@@ -216,8 +212,8 @@ func (c *ParseConfig) WithBaseOptions(overrides *CustomParseOptions) *ParseConfi
 //
 //	cfg := NewParseConfig().
 //		WithRecommendedDefaults().
-//		WithKeyOptions("SECRET", &CustomParseOptions{UnescapeBackslashN: BoolPtr(false)}).
-//		WithKeyOptions("TOKEN", &CustomParseOptions{Overwrite: BoolPtr(true)})
+//		WithKeyOptions("SECRET", &CustomParseOptions{UnescapeBackslashN: new(false)}).
+//		WithKeyOptions("TOKEN", &CustomParseOptions{Overwrite: new(true)})
 func (c *ParseConfig) WithKeyOptions(key string, overrides *CustomParseOptions) *ParseConfig {
 	if c.KeyOptions == nil {
 		c.KeyOptions = make(map[string]ParseOptions)

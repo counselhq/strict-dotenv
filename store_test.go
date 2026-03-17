@@ -146,11 +146,11 @@ func TestEnvStoreProcessValue(t *testing.T) {
 			"OTHER": "d\\ne\rf",
 		}
 		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
-			UnescapeBackslashN: BoolPtr(true),
-			TransformCRToLF:    BoolPtr(true),
+			UnescapeBackslashN: new(true),
+			TransformCRToLF:    new(true),
 		}).WithKeyOptions("KEY", &CustomParseOptions{
-			UnescapeBackslashN: BoolPtr(false),
-			TransformCRToLF:    BoolPtr(false),
+			UnescapeBackslashN: new(false),
+			TransformCRToLF:    new(false),
 		})
 
 		if err := store.ProcessValue("KEY", cfg); err != nil {
@@ -207,11 +207,11 @@ func TestEnvStoreProcessValues(t *testing.T) {
 			"OTHER": "f\rg",
 		}
 		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
-			UnescapeBackslashN: BoolPtr(true),
-			TransformCRToLF:    BoolPtr(true),
+			UnescapeBackslashN: new(true),
+			TransformCRToLF:    new(true),
 		}).WithKeyOptions("KEY", &CustomParseOptions{
-			UnescapeBackslashN: BoolPtr(false),
-			TransformCRToLF:    BoolPtr(false),
+			UnescapeBackslashN: new(false),
+			TransformCRToLF:    new(false),
 		})
 
 		if err := store.ProcessValues(cfg); err != nil {
@@ -289,7 +289,7 @@ func TestEnvStoreSetFromRequiredDotEnv(t *testing.T) {
 	t.Run("honors parse config overwrite", func(t *testing.T) {
 		store := EnvStore{"EXISTING": "keep"}
 		path := writeDotEnvFile(t, "EXISTING=replace\nNEW=value\n")
-		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)})
+		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: new(true)})
 
 		if err := store.SetFromRequiredDotEnv(path, cfg); err != nil {
 			t.Fatalf("SetFromRequiredDotEnv returned unexpected error: %v", err)
@@ -363,7 +363,7 @@ func TestEnvStoreSetFromString(t *testing.T) {
 func TestEnvStoreSetFromReader(t *testing.T) {
 	t.Run("loads values and honors parse config overwrite", func(t *testing.T) {
 		store := EnvStore{"EXISTING": "keep"}
-		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)})
+		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: new(true)})
 
 		err := store.SetFromReader(strings.NewReader("EXISTING=replace\nNEW=value\n"), "reader.env", cfg)
 		if err != nil {

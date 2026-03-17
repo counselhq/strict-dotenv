@@ -74,12 +74,12 @@ The parse entry points take a `*ParseConfig`. Use `cfg := strictdotenv.NewParseC
 
 All parse methods write into the receiver `EnvStore`. Parse failures return an error, and the file-based methods differ on missing-file handling as documented below.
 
-| Method                              | Use when                                       | Notes                                                                       |
-| ----------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
-| `store.SetFromOptionalDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe, but it is optional | Missing files are ignored; `path` is used in parser error messages; `nil` cfg means all-zero options |
-| `store.SetFromRequiredDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe and it must exist | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages; `nil` cfg means all-zero options |
-| `store.SetFromString(s, name, cfg)`      | You already have the dotenv contents in memory                   | `name` is used to identify source in error messages (default `"string"`); `nil` cfg means all-zero options |
-| `store.SetFromReader(r, name, cfg)`      | You want to parse from an `io.Reader`                            | `name` is used to identify source in error messages (default `"io.Reader"`); `nil` cfg means all-zero options |
+| Method                                   | Use when                                                         | Notes                                                                                                              |
+| ---------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `store.SetFromOptionalDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe, but it is optional | Missing files are ignored; `path` is used in parser error messages; `nil` cfg means all-zero options               |
+| `store.SetFromRequiredDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe and it must exist   | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages; `nil` cfg means all-zero options |
+| `store.SetFromString(s, name, cfg)`      | You already have the dotenv contents in memory                   | `name` is used to identify source in error messages (default `"string"`); `nil` cfg means all-zero options         |
+| `store.SetFromReader(r, name, cfg)`      | You want to parse from an `io.Reader`                            | `name` is used to identify source in error messages (default `"io.Reader"`); `nil` cfg means all-zero options      |
 
 ## Parse Configuration
 
@@ -92,11 +92,11 @@ Use a `ParseConfig` when you want explicit control over the base settings or per
 
 ### Starting points
 
-| Starting point             | API                                                     | Meaning                                                     |
-| -------------------------- | ------------------------------------------------------- | ----------------------------------------------------------- |
+| Starting point             | API                                                       | Meaning                                                     |
+| -------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- |
 | Recommended defaults       | `strictdotenv.NewParseConfig().WithRecommendedDefaults()` | Use the library defaults explicitly                         |
-| Explicit zero-value config | `strictdotenv.NewParseConfig()`                         | Every option starts at `false` until you opt in to behavior |
-| Implicit zero-value config | `nil`                                                   | Equivalent to a zero-value `ParseConfig`                    |
+| Explicit zero-value config | `strictdotenv.NewParseConfig()`                           | Every option starts at `false` until you opt in to behavior |
+| Implicit zero-value config | `nil`                                                     | Equivalent to a zero-value `ParseConfig`                    |
 
 ### Base vs key-specific settings
 
@@ -111,13 +111,13 @@ Unset fields inherit. That means a key-specific override only needs to mention t
 cfg := strictdotenv.NewParseConfig().
 	WithRecommendedDefaults().
 	WithBaseOptions(&strictdotenv.CustomParseOptions{
-		Overwrite:          strictdotenv.BoolPtr(true),
-		UnescapeBackslashN: strictdotenv.BoolPtr(true),
+		Overwrite:          new(true),
+		UnescapeBackslashN: new(true),
 	}).
 	WithKeyOptions("PRIVATE_KEY", &strictdotenv.CustomParseOptions{
-		UnescapeBackslashN: strictdotenv.BoolPtr(false),
-		TransformCRLFToLF:  strictdotenv.BoolPtr(false),
-		TransformCRToLF:    strictdotenv.BoolPtr(false),
+		UnescapeBackslashN: new(false),
+		TransformCRLFToLF:  new(false),
+		TransformCRToLF:    new(false),
 	})
 ```
 
@@ -131,7 +131,7 @@ If you want to build a config from all-zero settings instead, skip `WithRecommen
 
 ## Parse Options Reference
 
-All options are fields on `CustomParseOptions`. The `BoolPtr` helper exists to make those fields easy to populate.
+All options are fields on `CustomParseOptions`.
 
 `Overwrite` applies to all kinds of key-value pairs. All other options apply only to double-quoted values.
 
@@ -163,22 +163,22 @@ A few important points:
 
 ### Common store methods
 
-| Method                                             | Purpose                                                                 | Notes                                                                                     |
-| -------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `NewEnvStore()`                                    | Create an empty store                                                   | Returns a writable `map[string]string`                                                    |
-| `Get(key)`                                         | Read a value with map-style presence reporting                          | Returns `(value, ok)` so empty strings can be distinguished from missing keys             |
-| `GetRequired(key)`                                      | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                                   |
-| `Set(key, value, overwrite)`                            | Write one value                                                         | `overwrite=false` keeps an existing value                                                     |
-| `Merge(other, overwrite)`                               | Merge another `EnvStore` into this one                                  | Same overwrite semantics as `Set`                                                              |
-| `ProcessValue(key, cfg)`                                | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
-| `ProcessValues(cfg)`                                    | Reprocess every stored value using parser-style config resolution       | Applies base plus per-key options; leaves the store unchanged on error                        |
-| `SetFromOptionalDotEnv(path, cfg)`                      | Parse an optional dotenv file into the store                            | Missing files are ignored; `path` is used in parser error messages                            |
-| `SetFromRequiredDotEnv(path, cfg)`                      | Parse a required dotenv file into the store                             | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages             |
-| `SetFromString(s, name, cfg)`                           | Parse dotenv contents from a string into the store                      | If `name` is empty, errors use `"string"` as source name                                      |
-| `SetFromReader(r, name, cfg)`                           | Parse dotenv contents from an `io.Reader` into the store                | If `name` is empty, errors use `"io.Reader"` as source name                                   |
-| `SetFromOsEnviron(allowlist, denylist, overwrite)`      | Import from the current process environment                             | `allowlist` and `denylist` are `map[string]struct{}`                                          |
-| `LoadIntoOsEnviron(allowlist, denylist, overwrite)`     | Export store values into the current process environment                | Existing OS values are preserved unless `overwrite` is `true`                                 |
-| `FilterKeys(allowlist, denylist)`                       | Remove keys that fail the combined filters                              | `nil` allowlist keeps all; `nil` denylist removes none; denylist wins on overlap              |
+| Method                                              | Purpose                                                                 | Notes                                                                                             |
+| --------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `NewEnvStore()`                                     | Create an empty store                                                   | Returns a writable `map[string]string`                                                            |
+| `Get(key)`                                          | Read a value with map-style presence reporting                          | Returns `(value, ok)` so empty strings can be distinguished from missing keys                     |
+| `GetRequired(key)`                                  | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                                       |
+| `Set(key, value, overwrite)`                        | Write one value                                                         | `overwrite=false` keeps an existing value                                                         |
+| `Merge(other, overwrite)`                           | Merge another `EnvStore` into this one                                  | Same overwrite semantics as `Set`                                                                 |
+| `ProcessValue(key, cfg)`                            | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
+| `ProcessValues(cfg)`                                | Reprocess every stored value using parser-style config resolution       | Applies base plus per-key options; leaves the store unchanged on error                            |
+| `SetFromOptionalDotEnv(path, cfg)`                  | Parse an optional dotenv file into the store                            | Missing files are ignored; `path` is used in parser error messages                                |
+| `SetFromRequiredDotEnv(path, cfg)`                  | Parse a required dotenv file into the store                             | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages                  |
+| `SetFromString(s, name, cfg)`                       | Parse dotenv contents from a string into the store                      | If `name` is empty, errors use `"string"` as source name                                          |
+| `SetFromReader(r, name, cfg)`                       | Parse dotenv contents from an `io.Reader` into the store                | If `name` is empty, errors use `"io.Reader"` as source name                                       |
+| `SetFromOsEnviron(allowlist, denylist, overwrite)`  | Import from the current process environment                             | `allowlist` and `denylist` are `map[string]struct{}`                                              |
+| `LoadIntoOsEnviron(allowlist, denylist, overwrite)` | Export store values into the current process environment                | Existing OS values are preserved unless `overwrite` is `true`                                     |
+| `FilterKeys(allowlist, denylist)`                   | Remove keys that fail the combined filters                              | `nil` allowlist keeps all; `nil` denylist removes none; denylist wins on overlap                  |
 
 ### Reprocess existing store values
 
@@ -193,10 +193,10 @@ A few important points:
 cfg := strictdotenv.NewParseConfig().
 	WithRecommendedDefaults().
 	WithBaseOptions(&strictdotenv.CustomParseOptions{
-		UnescapeBackslashN: strictdotenv.BoolPtr(false),
+		UnescapeBackslashN: new(false),
 	}).
 	WithKeyOptions("PRIVATE_KEY", &strictdotenv.CustomParseOptions{
-		UnescapeBackslashN: strictdotenv.BoolPtr(true),
+		UnescapeBackslashN: new(true),
 	})
 
 if err := store.ProcessValue("PRIVATE_KEY", cfg); err != nil {
@@ -213,7 +213,7 @@ store.SetFromOsEnviron(nil, nil, false)
 cfg := strictdotenv.NewParseConfig().
 	WithRecommendedDefaults().
 	WithKeyOptions("PRIVATE_KEY", &strictdotenv.CustomParseOptions{
-		UnescapeBackslashN: strictdotenv.BoolPtr(true),
+		UnescapeBackslashN: new(true),
 	})
 
 if err := store.ProcessValues(cfg); err != nil {
