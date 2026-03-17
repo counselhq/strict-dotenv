@@ -836,7 +836,7 @@ func isKeyOrExportChar(r rune) bool {
 	return uint32(r) < 128 && lettersDigitsAndUnderscore[r]
 }
 
-// processValue applies ParseOptions to the raw byte content between
+// processValue applies resolved parse options to the raw byte content between
 // double quotes while iterating the value once. Recognized backslash sequences
 // are unescaped first, then the resulting stream is normalized as if CRLF and
 // CR transforms were applied in order.
@@ -847,7 +847,7 @@ func isKeyOrExportChar(r rune) bool {
 //
 // A lone trailing backslash (no following byte) is treated as a literal '\' when
 // UnescapeBackslashBackslash is false, and is an error otherwise.
-func processValue(b []byte, opts ParseOptions) (string, error) {
+func processValue(b []byte, opts resolvedParseOptions) (string, error) {
 	var buf strings.Builder
 	buf.Grow(len(b))
 

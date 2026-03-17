@@ -145,10 +145,12 @@ func TestEnvStoreProcessValue(t *testing.T) {
 			"KEY":   "a\\nb\rc",
 			"OTHER": "d\\ne\rf",
 		}
-		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
+		cfg := new(ParseConfig)
+		cfg.ApplyGlobalOptions(&ParseOptions{
 			UnescapeBackslashN: new(true),
 			TransformCRToLF:    new(true),
-		}).WithKeyOptions("KEY", &CustomParseOptions{
+		})
+		cfg.ApplyKeyOptions("KEY", &ParseOptions{
 			UnescapeBackslashN: new(false),
 			TransformCRToLF:    new(false),
 		})
@@ -168,7 +170,8 @@ func TestEnvStoreProcessValue(t *testing.T) {
 
 	t.Run("leaves the original value unchanged when processing fails", func(t *testing.T) {
 		store := EnvStore{"KEY": "trailing\\"}
-		cfg := NewParseConfig().WithRecommendedDefaults()
+		cfg := new(ParseConfig)
+		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashBackslash: new(true)})
 
 		err := store.ProcessValue("KEY", cfg)
 		if err == nil {
@@ -206,10 +209,12 @@ func TestEnvStoreProcessValues(t *testing.T) {
 			"KEY":   "c\\nd\re",
 			"OTHER": "f\rg",
 		}
-		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{
+		cfg := new(ParseConfig)
+		cfg.ApplyGlobalOptions(&ParseOptions{
 			UnescapeBackslashN: new(true),
 			TransformCRToLF:    new(true),
-		}).WithKeyOptions("KEY", &CustomParseOptions{
+		})
+		cfg.ApplyKeyOptions("KEY", &ParseOptions{
 			UnescapeBackslashN: new(false),
 			TransformCRToLF:    new(false),
 		})
@@ -231,7 +236,8 @@ func TestEnvStoreProcessValues(t *testing.T) {
 			"GOOD": "a\\nb",
 		}
 		want := maps.Clone(store)
-		cfg := NewParseConfig().WithRecommendedDefaults()
+		cfg := new(ParseConfig)
+		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashBackslash: new(true)})
 
 		err := store.ProcessValues(cfg)
 		if err == nil {
@@ -289,7 +295,8 @@ func TestEnvStoreSetFromRequiredDotEnv(t *testing.T) {
 	t.Run("honors parse config overwrite", func(t *testing.T) {
 		store := EnvStore{"EXISTING": "keep"}
 		path := writeDotEnvFile(t, "EXISTING=replace\nNEW=value\n")
-		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: new(true)})
+		cfg := new(ParseConfig)
+		cfg.ApplyGlobalOptions(&ParseOptions{Overwrite: new(true)})
 
 		if err := store.SetFromRequiredDotEnv(path, cfg); err != nil {
 			t.Fatalf("SetFromRequiredDotEnv returned unexpected error: %v", err)
@@ -363,7 +370,8 @@ func TestEnvStoreSetFromString(t *testing.T) {
 func TestEnvStoreSetFromReader(t *testing.T) {
 	t.Run("loads values and honors parse config overwrite", func(t *testing.T) {
 		store := EnvStore{"EXISTING": "keep"}
-		cfg := NewParseConfig().WithRecommendedDefaults().WithBaseOptions(&CustomParseOptions{Overwrite: new(true)})
+		cfg := new(ParseConfig)
+		cfg.ApplyGlobalOptions(&ParseOptions{Overwrite: new(true)})
 
 		err := store.SetFromReader(strings.NewReader("EXISTING=replace\nNEW=value\n"), "reader.env", cfg)
 		if err != nil {

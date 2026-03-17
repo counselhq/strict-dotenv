@@ -16,7 +16,7 @@ func BenchmarkEnvStoreSetFromRequiredDotEnv(b *testing.B) {
 
 	// verify the file parses without error before benchmarking
 	store := NewEnvStore()
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(ParseConfig)
 	if err := store.SetFromRequiredDotEnv(pathBenchmark1, cfg); err != nil {
 		b.Fatalf("setup: %v", err)
 	}

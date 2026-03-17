@@ -107,7 +107,7 @@ func parse(name string, bytes []byte, store EnvStore, cfg *ParseConfig) error {
 
 	var key string
 	var value string
-	var currentOptions ParseOptions
+	var currentOptions resolvedParseOptions
 	var sawWhitespaceAfterExport bool
 
 	commit := func() {

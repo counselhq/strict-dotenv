@@ -4,137 +4,169 @@ package strictdotenv
 // ParseConfig
 // ---------------------------------------------------------------------------
 
-// ParseConfig selects the default ParseOptions for the parse and optionally
-// replaces them for specific keys. Use NewParseConfig to construct an empty
-// ParseConfig, WithRecommendedDefaults to opt into strict-dotenv's recommended
-// defaults, WithBaseOptions to modify the current base options, and
-// WithKeyOptions to add per-key overrides that inherit from the current base.
-// Overwrite affects every committed key-value pair during parsing; all other
-// ParseOptions affect only double-quoted values. EnvStore.ProcessValue and
-// EnvStore.ProcessValues ignore Overwrite.
+// ParseConfig stores partial parse options plus their resolved concrete values.
+// All options are disabled by default. ApplyGlobalOptions sets the base options
+// for every key, and ApplyKeyOptions adds or updates exact-key overrides that
+// inherit from the current global settings. Overwrite affects every committed
+// key-value pair during parsing; all other ParseOptions affect only
+// double-quoted values. EnvStore.ProcessValue and EnvStore.ProcessValues ignore
+// Overwrite.
 //
 // Usage:
 //
-//	cfg := NewParseConfig() // all zero values
-//	cfg := NewParseConfig().
-//		WithRecommendedDefaults().
-//		WithBaseOptions(&CustomParseOptions{Overwrite: new(true)})
-//	cfg := NewParseConfig().
-//		WithRecommendedDefaults().
-//		WithKeyOptions("SECRET", &CustomParseOptions{UnescapeBackslashN: new(false)})
+//	cfg := new(ParseConfig)
+//	cfg.ApplyGlobalOptions(&ParseOptions{Overwrite: new(true)})
+//	cfg.ApplyKeyOptions("SECRET", &ParseOptions{UnescapeBackslashN: new(false)})
 type ParseConfig struct {
-	ParseOptions ParseOptions
-	KeyOptions   map[string]ParseOptions
+	GlobalOptions ParseOptions
+	KeyOptions    map[string]ParseOptions
+
+	resolvedGlobalOptions resolvedParseOptions
+	resolvedKeyOptions    map[string]resolvedParseOptions
 }
 
 // ---------------------------------------------------------------------------
-// ParseOptions and CustomParseOptions
+// ParseOptions
 // ---------------------------------------------------------------------------
 
-// ParseOptions controls duplicate-key handling during parsing and the
-// double-quoted value transform pipeline used by both parsing and EnvStore
-// value-processing helpers.
+// ParseOptions is the partial, pointer-based form used to set only the fields
+// you want to enable or disable. Nil fields leave the existing value unchanged
+// when applied to a ParseConfig.
 type ParseOptions struct {
-	Overwrite                    bool
-	UnescapeBackslashBackslash   bool // \\
-	UnescapeBackslashDoubleQuote bool // \"
-	UnescapeBackslashSingleQuote bool // \'
-	UnescapeBackslashA           bool // \a (alert/bell)
-	UnescapeBackslashB           bool // \b (backspace)
-	UnescapeBackslashF           bool // \f (form feed)
-	UnescapeBackslashN           bool // \n (line feed)
-	UnescapeBackslashR           bool // \r (carriage return)
-	UnescapeBackslashT           bool // \t (tab)
-	UnescapeBackslashV           bool // \v (vertical tab)
-	TransformCRLFToLF            bool // after unescaping
-	TransformCRToLF              bool // after TransformCRLFToLF
-}
-
-// CustomParseOptions is the partial, pointer-based form used for overriding
-// only selected ParseOptions fields while leaving the rest unchanged.
-type CustomParseOptions struct {
 	Overwrite                    *bool
-	UnescapeBackslashBackslash   *bool
-	UnescapeBackslashDoubleQuote *bool
-	UnescapeBackslashSingleQuote *bool
-	UnescapeBackslashA           *bool
-	UnescapeBackslashB           *bool
-	UnescapeBackslashF           *bool
-	UnescapeBackslashN           *bool
-	UnescapeBackslashR           *bool
-	UnescapeBackslashT           *bool
-	UnescapeBackslashV           *bool
-	TransformCRLFToLF            *bool
-	TransformCRToLF              *bool
+	UnescapeBackslashBackslash   *bool // \\
+	UnescapeBackslashDoubleQuote *bool // \"
+	UnescapeBackslashSingleQuote *bool // \'
+	UnescapeBackslashA           *bool // \a (alert/bell)
+	UnescapeBackslashB           *bool // \b (backspace)
+	UnescapeBackslashF           *bool // \f (form feed)
+	UnescapeBackslashN           *bool // \n (line feed)
+	UnescapeBackslashR           *bool // \r (carriage return)
+	UnescapeBackslashT           *bool // \t (tab)
+	UnescapeBackslashV           *bool // \v (vertical tab)
+	TransformCRLFToLF            *bool // after unescaping
+	TransformCRToLF              *bool // after TransformCRLFToLF
 }
 
-// defaultParseOptions contains the library's current recommended parse
-// defaults. Use ParseConfig.WithRecommendedDefaults to copy them into a
-// config before applying additional overrides.
-var defaultParseOptions = CustomParseOptions{
-	Overwrite:                    new(false),
-	UnescapeBackslashBackslash:   new(true),
-	UnescapeBackslashDoubleQuote: new(true),
-	UnescapeBackslashSingleQuote: new(false),
-	UnescapeBackslashA:           new(false),
-	UnescapeBackslashB:           new(false),
-	UnescapeBackslashF:           new(false),
-	UnescapeBackslashN:           new(true),
-	UnescapeBackslashR:           new(true),
-	UnescapeBackslashT:           new(true),
-	UnescapeBackslashV:           new(false),
-	TransformCRLFToLF:            new(true),
-	TransformCRToLF:              new(true),
+// resolvedParseOptions is the concrete form used during parsing and value
+// processing.
+type resolvedParseOptions struct {
+	Overwrite                    bool
+	UnescapeBackslashBackslash   bool
+	UnescapeBackslashDoubleQuote bool
+	UnescapeBackslashSingleQuote bool
+	UnescapeBackslashA           bool
+	UnescapeBackslashB           bool
+	UnescapeBackslashF           bool
+	UnescapeBackslashN           bool
+	UnescapeBackslashR           bool
+	UnescapeBackslashT           bool
+	UnescapeBackslashV           bool
+	TransformCRLFToLF            bool
+	TransformCRToLF              bool
 }
 
-// resolveCustom converts a fully-populated CustomParseOptions to ParseOptions.
-func resolveCustom(c *CustomParseOptions) ParseOptions {
-	var opts ParseOptions
-	if c.Overwrite != nil {
-		opts.Overwrite = *c.Overwrite
+func cloneBool(value *bool) *bool {
+	if value == nil {
+		return nil
 	}
-	if c.UnescapeBackslashBackslash != nil {
-		opts.UnescapeBackslashBackslash = *c.UnescapeBackslashBackslash
-	}
-	if c.UnescapeBackslashDoubleQuote != nil {
-		opts.UnescapeBackslashDoubleQuote = *c.UnescapeBackslashDoubleQuote
-	}
-	if c.UnescapeBackslashSingleQuote != nil {
-		opts.UnescapeBackslashSingleQuote = *c.UnescapeBackslashSingleQuote
-	}
-	if c.UnescapeBackslashA != nil {
-		opts.UnescapeBackslashA = *c.UnescapeBackslashA
-	}
-	if c.UnescapeBackslashB != nil {
-		opts.UnescapeBackslashB = *c.UnescapeBackslashB
-	}
-	if c.UnescapeBackslashF != nil {
-		opts.UnescapeBackslashF = *c.UnescapeBackslashF
-	}
-	if c.UnescapeBackslashN != nil {
-		opts.UnescapeBackslashN = *c.UnescapeBackslashN
-	}
-	if c.UnescapeBackslashR != nil {
-		opts.UnescapeBackslashR = *c.UnescapeBackslashR
-	}
-	if c.UnescapeBackslashT != nil {
-		opts.UnescapeBackslashT = *c.UnescapeBackslashT
-	}
-	if c.UnescapeBackslashV != nil {
-		opts.UnescapeBackslashV = *c.UnescapeBackslashV
-	}
-	if c.TransformCRLFToLF != nil {
-		opts.TransformCRLFToLF = *c.TransformCRLFToLF
-	}
-	if c.TransformCRToLF != nil {
-		opts.TransformCRToLF = *c.TransformCRToLF
-	}
-	return opts
+	return new(*value)
 }
 
-// applyCustomOverrides returns a copy of base with any non-nil fields from
-// overrides applied. If overrides is nil, base is returned unchanged.
-func applyCustomOverrides(base ParseOptions, overrides *CustomParseOptions) ParseOptions {
+func mergeParseOptions(base ParseOptions, overrides *ParseOptions) ParseOptions {
+	if overrides == nil {
+		return base
+	}
+	if overrides.Overwrite != nil {
+		base.Overwrite = cloneBool(overrides.Overwrite)
+	}
+	if overrides.UnescapeBackslashBackslash != nil {
+		base.UnescapeBackslashBackslash = cloneBool(overrides.UnescapeBackslashBackslash)
+	}
+	if overrides.UnescapeBackslashDoubleQuote != nil {
+		base.UnescapeBackslashDoubleQuote = cloneBool(overrides.UnescapeBackslashDoubleQuote)
+	}
+	if overrides.UnescapeBackslashSingleQuote != nil {
+		base.UnescapeBackslashSingleQuote = cloneBool(overrides.UnescapeBackslashSingleQuote)
+	}
+	if overrides.UnescapeBackslashA != nil {
+		base.UnescapeBackslashA = cloneBool(overrides.UnescapeBackslashA)
+	}
+	if overrides.UnescapeBackslashB != nil {
+		base.UnescapeBackslashB = cloneBool(overrides.UnescapeBackslashB)
+	}
+	if overrides.UnescapeBackslashF != nil {
+		base.UnescapeBackslashF = cloneBool(overrides.UnescapeBackslashF)
+	}
+	if overrides.UnescapeBackslashN != nil {
+		base.UnescapeBackslashN = cloneBool(overrides.UnescapeBackslashN)
+	}
+	if overrides.UnescapeBackslashR != nil {
+		base.UnescapeBackslashR = cloneBool(overrides.UnescapeBackslashR)
+	}
+	if overrides.UnescapeBackslashT != nil {
+		base.UnescapeBackslashT = cloneBool(overrides.UnescapeBackslashT)
+	}
+	if overrides.UnescapeBackslashV != nil {
+		base.UnescapeBackslashV = cloneBool(overrides.UnescapeBackslashV)
+	}
+	if overrides.TransformCRLFToLF != nil {
+		base.TransformCRLFToLF = cloneBool(overrides.TransformCRLFToLF)
+	}
+	if overrides.TransformCRToLF != nil {
+		base.TransformCRToLF = cloneBool(overrides.TransformCRToLF)
+	}
+	return base
+}
+
+func resolveOptions(opts *ParseOptions) resolvedParseOptions {
+	var resolved resolvedParseOptions
+	if opts == nil {
+		return resolved
+	}
+	if opts.Overwrite != nil {
+		resolved.Overwrite = *opts.Overwrite
+	}
+	if opts.UnescapeBackslashBackslash != nil {
+		resolved.UnescapeBackslashBackslash = *opts.UnescapeBackslashBackslash
+	}
+	if opts.UnescapeBackslashDoubleQuote != nil {
+		resolved.UnescapeBackslashDoubleQuote = *opts.UnescapeBackslashDoubleQuote
+	}
+	if opts.UnescapeBackslashSingleQuote != nil {
+		resolved.UnescapeBackslashSingleQuote = *opts.UnescapeBackslashSingleQuote
+	}
+	if opts.UnescapeBackslashA != nil {
+		resolved.UnescapeBackslashA = *opts.UnescapeBackslashA
+	}
+	if opts.UnescapeBackslashB != nil {
+		resolved.UnescapeBackslashB = *opts.UnescapeBackslashB
+	}
+	if opts.UnescapeBackslashF != nil {
+		resolved.UnescapeBackslashF = *opts.UnescapeBackslashF
+	}
+	if opts.UnescapeBackslashN != nil {
+		resolved.UnescapeBackslashN = *opts.UnescapeBackslashN
+	}
+	if opts.UnescapeBackslashR != nil {
+		resolved.UnescapeBackslashR = *opts.UnescapeBackslashR
+	}
+	if opts.UnescapeBackslashT != nil {
+		resolved.UnescapeBackslashT = *opts.UnescapeBackslashT
+	}
+	if opts.UnescapeBackslashV != nil {
+		resolved.UnescapeBackslashV = *opts.UnescapeBackslashV
+	}
+	if opts.TransformCRLFToLF != nil {
+		resolved.TransformCRLFToLF = *opts.TransformCRLFToLF
+	}
+	if opts.TransformCRToLF != nil {
+		resolved.TransformCRToLF = *opts.TransformCRToLF
+	}
+	return resolved
+}
+
+func applyResolvedOptions(base resolvedParseOptions, overrides *ParseOptions) resolvedParseOptions {
 	if overrides == nil {
 		return base
 	}
@@ -180,56 +212,60 @@ func applyCustomOverrides(base ParseOptions, overrides *CustomParseOptions) Pars
 	return base
 }
 
-// NewParseConfig creates an empty *ParseConfig without applying any defaults.
-//
-// Usage:
-//
-//	cfg := NewParseConfig()                              // all zero values
-//	cfg := NewParseConfig().WithRecommendedDefaults()    // recommended defaults
-func NewParseConfig() *ParseConfig {
-	return &ParseConfig{}
+// ApplyGlobalOptions merges the supplied overrides into the config's global
+// options and refreshes all resolved global and key-specific options.
+func (c *ParseConfig) ApplyGlobalOptions(overrides *ParseOptions) {
+	c.GlobalOptions = mergeParseOptions(c.GlobalOptions, overrides)
+	c.resolvedGlobalOptions = resolveOptions(&c.GlobalOptions)
+
+	if len(c.KeyOptions) == 0 {
+		c.resolvedKeyOptions = nil
+		return
+	}
+
+	if c.resolvedKeyOptions == nil {
+		c.resolvedKeyOptions = make(map[string]resolvedParseOptions, len(c.KeyOptions))
+	} else {
+		clear(c.resolvedKeyOptions)
+	}
+
+	for key, keyOptions := range c.KeyOptions {
+		c.resolvedKeyOptions[key] = applyResolvedOptions(c.resolvedGlobalOptions, &keyOptions)
+	}
 }
 
-// WithRecommendedDefaults replaces the config's base ParseOptions with
-// strict-dotenv's current recommended defaults.
-func (c *ParseConfig) WithRecommendedDefaults() *ParseConfig {
-	c.ParseOptions = resolveCustom(&defaultParseOptions)
-	return c
-}
-
-// WithBaseOptions applies partial overrides to the config's current base
-// ParseOptions. Unset fields are left unchanged.
-func (c *ParseConfig) WithBaseOptions(overrides *CustomParseOptions) *ParseConfig {
-	c.ParseOptions = applyCustomOverrides(c.ParseOptions, overrides)
-	return c
-}
-
-// WithKeyOptions returns the ParseConfig with key-specific overrides added.
-// Only set the fields you want to change; unset fields inherit from the
-// config's current base ParseOptions.
-//
-// Usage:
-//
-//	cfg := NewParseConfig().
-//		WithRecommendedDefaults().
-//		WithKeyOptions("SECRET", &CustomParseOptions{UnescapeBackslashN: new(false)}).
-//		WithKeyOptions("TOKEN", &CustomParseOptions{Overwrite: new(true)})
-func (c *ParseConfig) WithKeyOptions(key string, overrides *CustomParseOptions) *ParseConfig {
+// ApplyKeyOptions merges the supplied overrides into the exact-key options and
+// refreshes the resolved options for that key only.
+func (c *ParseConfig) ApplyKeyOptions(key string, overrides *ParseOptions) {
 	if c.KeyOptions == nil {
 		c.KeyOptions = make(map[string]ParseOptions)
 	}
-	c.KeyOptions[key] = applyCustomOverrides(c.ParseOptions, overrides)
-	return c
+
+	c.KeyOptions[key] = mergeParseOptions(c.KeyOptions[key], overrides)
+	c.resolvedGlobalOptions = resolveOptions(&c.GlobalOptions)
+
+	if c.resolvedKeyOptions == nil {
+		c.resolvedKeyOptions = make(map[string]resolvedParseOptions, len(c.KeyOptions))
+	}
+	keyOptions := c.KeyOptions[key]
+	c.resolvedKeyOptions[key] = applyResolvedOptions(c.resolvedGlobalOptions, &keyOptions)
 }
 
-func resolveParseOptions(cfg *ParseConfig, key string) ParseOptions {
+func resolveParseOptions(cfg *ParseConfig, key string) resolvedParseOptions {
 	if cfg == nil {
-		return ParseOptions{}
+		return resolvedParseOptions{}
 	}
 
-	if opts, ok := cfg.KeyOptions[key]; ok {
-		return opts
+	cfg.resolvedGlobalOptions = resolveOptions(&cfg.GlobalOptions)
+
+	if keyOptions, ok := cfg.KeyOptions[key]; ok {
+		resolved := applyResolvedOptions(cfg.resolvedGlobalOptions, &keyOptions)
+		if cfg.resolvedKeyOptions == nil {
+			cfg.resolvedKeyOptions = make(map[string]resolvedParseOptions, len(cfg.KeyOptions))
+		}
+		cfg.resolvedKeyOptions[key] = resolved
+		return resolved
 	}
 
-	return cfg.ParseOptions
+	return cfg.resolvedGlobalOptions
 }
