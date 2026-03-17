@@ -66,55 +66,48 @@ type resolvedParseOptions struct {
 	TransformCRToLF              bool
 }
 
-func cloneBool(value *bool) *bool {
-	if value == nil {
-		return nil
-	}
-	return new(*value)
-}
-
 func mergeParseOptions(base ParseOptions, overrides *ParseOptions) ParseOptions {
 	if overrides == nil {
 		return base
 	}
 	if overrides.Overwrite != nil {
-		base.Overwrite = cloneBool(overrides.Overwrite)
+		base.Overwrite = new(*overrides.Overwrite)
 	}
 	if overrides.UnescapeBackslashBackslash != nil {
-		base.UnescapeBackslashBackslash = cloneBool(overrides.UnescapeBackslashBackslash)
+		base.UnescapeBackslashBackslash = new(*overrides.UnescapeBackslashBackslash)
 	}
 	if overrides.UnescapeBackslashDoubleQuote != nil {
-		base.UnescapeBackslashDoubleQuote = cloneBool(overrides.UnescapeBackslashDoubleQuote)
+		base.UnescapeBackslashDoubleQuote = new(*overrides.UnescapeBackslashDoubleQuote)
 	}
 	if overrides.UnescapeBackslashSingleQuote != nil {
-		base.UnescapeBackslashSingleQuote = cloneBool(overrides.UnescapeBackslashSingleQuote)
+		base.UnescapeBackslashSingleQuote = new(*overrides.UnescapeBackslashSingleQuote)
 	}
 	if overrides.UnescapeBackslashA != nil {
-		base.UnescapeBackslashA = cloneBool(overrides.UnescapeBackslashA)
+		base.UnescapeBackslashA = new(*overrides.UnescapeBackslashA)
 	}
 	if overrides.UnescapeBackslashB != nil {
-		base.UnescapeBackslashB = cloneBool(overrides.UnescapeBackslashB)
+		base.UnescapeBackslashB = new(*overrides.UnescapeBackslashB)
 	}
 	if overrides.UnescapeBackslashF != nil {
-		base.UnescapeBackslashF = cloneBool(overrides.UnescapeBackslashF)
+		base.UnescapeBackslashF = new(*overrides.UnescapeBackslashF)
 	}
 	if overrides.UnescapeBackslashN != nil {
-		base.UnescapeBackslashN = cloneBool(overrides.UnescapeBackslashN)
+		base.UnescapeBackslashN = new(*overrides.UnescapeBackslashN)
 	}
 	if overrides.UnescapeBackslashR != nil {
-		base.UnescapeBackslashR = cloneBool(overrides.UnescapeBackslashR)
+		base.UnescapeBackslashR = new(*overrides.UnescapeBackslashR)
 	}
 	if overrides.UnescapeBackslashT != nil {
-		base.UnescapeBackslashT = cloneBool(overrides.UnescapeBackslashT)
+		base.UnescapeBackslashT = new(*overrides.UnescapeBackslashT)
 	}
 	if overrides.UnescapeBackslashV != nil {
-		base.UnescapeBackslashV = cloneBool(overrides.UnescapeBackslashV)
+		base.UnescapeBackslashV = new(*overrides.UnescapeBackslashV)
 	}
 	if overrides.TransformCRLFToLF != nil {
-		base.TransformCRLFToLF = cloneBool(overrides.TransformCRLFToLF)
+		base.TransformCRLFToLF = new(*overrides.TransformCRLFToLF)
 	}
 	if overrides.TransformCRToLF != nil {
-		base.TransformCRToLF = cloneBool(overrides.TransformCRToLF)
+		base.TransformCRToLF = new(*overrides.TransformCRToLF)
 	}
 	return base
 }
