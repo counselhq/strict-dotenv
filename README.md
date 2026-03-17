@@ -419,7 +419,7 @@ We are open to considering these features (or others) in the future if there is 
 
 ## Supported Go Versions
 
-We will support the current Go major version and the previous major version. For example, if the current Go version is `1.26`, we will support `1.26` and `1.25`.
+Currently, only 1.26 is supported. Starting with 1.27, we will support the current Go major version and the previous major version.
 
 ## License
 
