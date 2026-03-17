@@ -223,9 +223,9 @@ func TestParseConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
 		cfg := new(ParseConfig)
 		run(t, nil, cfg, testCase{
-			name:   "escaped double quote stays literal",
-			dotenv: "KEY=\"a\\\"b\"",
-			want:   EnvStore{"KEY": `a\"b`},
+			name:   "backslash before closing double quote is literal; the double quote closes the value",
+			dotenv: "KEY=\"a\\\"",
+			want:   EnvStore{"KEY": `a\`},
 		})
 	})
 
@@ -244,8 +244,8 @@ func TestParseConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashDoubleQuote: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped double quote unescaping",
-			dotenv: "KEY=\"a\\\"b\"\nOTHER=\"c\\\"d\"",
-			want:   EnvStore{"KEY": `a"b`, "OTHER": `c\"d`},
+			dotenv: "KEY=\"a\\\"b\"\nOTHER=\"c\\\"",
+			want:   EnvStore{"KEY": `a"b`, "OTHER": `c\`},
 		})
 	})
 
@@ -255,8 +255,8 @@ func TestParseConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashDoubleQuote: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped double quote unescaping for one key",
-			dotenv: "KEY=\"a\\\"b\"\nOTHER=\"c\\\"d\"",
-			want:   EnvStore{"KEY": `a\"b`, "OTHER": `c"d`},
+			dotenv: "KEY=\"a\\\"\nOTHER=\"c\\\"d\"",
+			want:   EnvStore{"KEY": `a\`, "OTHER": `c"d`},
 		})
 	})
 }

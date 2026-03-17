@@ -340,6 +340,7 @@ The rules below describe the parser's current behavior. They are intentionally s
 - Newlines are permitted inside double-quoted values (multi-line values); parsing continues until the closing quote
 - ParseOptions are applied in this order: unescaping, then `TransformCRLFToLF`, then `TransformCRToLF`
 - When a recognized `Unescape*` option is enabled, that backslash escape sequence is unescaped; otherwise it is preserved literally
+- `UnescapeBackslashDoubleQuote` is special because it affects how the parser determines where the value ends, not merely how the contents are post-processed. When enabled, `\"` is an escape sequence: the `"` is consumed as part of the escape and does **not** close the value; the pair is unescaped to `"` after extraction. When disabled (the default), `\` before `"` is a literal backslash character and the `"` closes the value normally — so `KEY="value\"` produces the value `value\`, while `KEY="val\"extra"` is a parse error because `extra"` appears after what the parser treats as the closing `"`
 - `TransformCRLFToLF` and `TransformCRToLF` are both disabled unless you enable them
 - Escape sequences without a corresponding ParseOptions switch (for example `\$`, `\x41`, `\u0041`, `\0`) are preserved as literals and not unescaped; for example, `\x41` is treated as the literal characters `\`, `x`, `4`, and `1`, not the single character `A`
 - Only whitespace characters, a newline, a comment, or `EOF` may follow the closing double quote; anything else (including another double quote) is an error

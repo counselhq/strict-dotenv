@@ -137,6 +137,12 @@ type lexer struct {
 	hasToken bool  // true when a token has been emitted and not yet consumed
 	done     bool  // true after EOF | error
 
+	// unescapeDoubleQuote controls whether a backslash before a double quote
+	// prevents the quote from closing the value. When true, '"' is an escape
+	// sequence and the '"' is consumed without ending the string. When false
+	// (the default), '\' is a literal character and '"' closes the value.
+	unescapeDoubleQuote bool
+
 	state stateFn
 }
 
@@ -596,15 +602,17 @@ func lexRightSingleQuote(l *lexer) stateFn {
 
 // lexDoubleQuoteValue scans the content between opening and closing double quotes.
 // Double-quoted values support:
-//   - ESCAPE SEQUENCES: the lexer preserves backslash escapes verbatim and lets
-//     the parser apply ParseOptions during value processing.
+//   - ESCAPE SEQUENCES: when l.unescapeDoubleQuote is true, the lexer consumes
+//     the character immediately after a '\' so that '\"' does not end the string.
+//     The parser applies ParseOptions during value processing to unescape them.
+//     When l.unescapeDoubleQuote is false (the default), '\' is treated as a
+//     literal character and any '"' closes the value immediately.
 //   - MULTI-LINE content: actual newlines inside the quotes are part of the value.
 //   - Optionally, CRLF and CR line endings within the value are transformed by
 //     the parser after unescaping, according to ParseOptions.
 //
-// The scan consumes characters until it finds an *unescaped* closing '"'.
-// When a backslash is encountered, the next character is consumed unconditionally
-// (so '\"' does not end the string).
+// The scan consumes characters until it finds the closing '"'. Whether a '"'
+// preceded by '\' terminates the string depends on l.unescapeDoubleQuote.
 //
 // When the closing quote is found, the cursor backs up (to exclude the quote
 // from the value range), and the token is emitted.
@@ -614,9 +622,11 @@ func lexDoubleQuoteValue(l *lexer) stateFn {
 		case eof:
 			return l.errorf("unterminated double-quoted value")
 		case '\\':
-			esc := l.next()
-			if esc == eof {
-				return l.errorf("unterminated double-quoted value")
+			if l.unescapeDoubleQuote {
+				esc := l.next()
+				if esc == eof {
+					return l.errorf("unterminated double-quoted value")
+				}
 			}
 		case '"':
 			l.backup()

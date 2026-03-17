@@ -195,6 +195,8 @@ func parse(name string, bytes []byte, store EnvStore, cfg *ParseConfig) error {
 			case tokenLeftSingleQuote:
 				state = parseStateExpectSingleQuotedValue
 			case tokenLeftDoubleQuote:
+				// Tell the lexer whether '\"' should prevent '"' from closing the value.
+				l.unescapeDoubleQuote = currentOptions.UnescapeBackslashDoubleQuote
 				state = parseStateExpectDoubleQuotedValue
 			case tokenComment:
 				value = "" // Empty value + inline comment

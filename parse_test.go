@@ -541,14 +541,14 @@ func TestDoubleQuoted(t *testing.T) {
 		want:   EnvStore{"KEY1": "Value 1", "KEY2": "Value 2"},
 	})
 
-	run(t, nil, cfg, testCase{name: "value with escaped double quote",
-		dotenv: "KEY=\"Value \\\"1\\\"\"",
-		want:   EnvStore{"KEY": `Value \"1\"`},
+	run(t, nil, cfg, testCase{name: "backslash before closing double quote is a literal backslash",
+		dotenv: `KEY="value\"`,
+		want:   EnvStore{"KEY": `value\`},
 	})
 
-	run(t, nil, cfg, testCase{name: "value with escape sequences",
-		dotenv: "KEY=\"line1\\nline2\\t\\r\\\\\"",
-		want:   EnvStore{"KEY": `line1\nline2\t\r\\`},
+	run(t, nil, cfg, testCase{name: "value with escape sequences - not unescaped with empty ParseConfig",
+		dotenv: "KEY=\"Line1\\nStillLine1\\t\\r\\\\\"",
+		want:   EnvStore{"KEY": `Line1\nStillLine1\t\r\\`},
 	})
 }
 
@@ -663,8 +663,8 @@ func TestDoubleQuotedErrorCases(t *testing.T) {
 		wantErr: true,
 	})
 
-	run(t, nil, cfg, testCase{name: "escaped closing double quote consumes the quote leaving no real close",
-		dotenv:  `KEY="value\"`,
+	run(t, nil, cfg, testCase{name: "backslash does not escape double quote; it becomes a closing double quote",
+		dotenv:  "KEY=\"value\\\"extra\"",
 		wantErr: true,
 	})
 
