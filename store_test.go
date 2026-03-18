@@ -146,11 +146,11 @@ func TestEnvStoreProcessValue(t *testing.T) {
 			"OTHER": "d\\ne\rf",
 		}
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{
+		cfg.MergeGlobalOptions(Options{
 			UnescapeBackslashN: new(true),
 			TransformCRToLF:    new(true),
 		})
-		cfg.ApplyKeyOptions("KEY", Options{
+		cfg.MergeKeyOptions("KEY", Options{
 			UnescapeBackslashN: new(false),
 			TransformCRToLF:    new(false),
 		})
@@ -171,7 +171,7 @@ func TestEnvStoreProcessValue(t *testing.T) {
 	t.Run("leaves the original value unchanged when processing fails", func(t *testing.T) {
 		store := EnvStore{"KEY": "trailing\\"}
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
 
 		err := store.ProcessValue("KEY", cfg)
 		if err == nil {
@@ -210,11 +210,11 @@ func TestEnvStoreProcessValues(t *testing.T) {
 			"OTHER": "f\rg",
 		}
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{
+		cfg.MergeGlobalOptions(Options{
 			UnescapeBackslashN: new(true),
 			TransformCRToLF:    new(true),
 		})
-		cfg.ApplyKeyOptions("KEY", Options{
+		cfg.MergeKeyOptions("KEY", Options{
 			UnescapeBackslashN: new(false),
 			TransformCRToLF:    new(false),
 		})
@@ -237,7 +237,7 @@ func TestEnvStoreProcessValues(t *testing.T) {
 		}
 		want := maps.Clone(store)
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
 
 		err := store.ProcessValues(cfg)
 		if err == nil {
@@ -296,7 +296,7 @@ func TestEnvStoreSetFromRequiredDotEnv(t *testing.T) {
 		store := EnvStore{"EXISTING": "keep"}
 		path := writeDotEnvFile(t, "EXISTING=replace\nNEW=value\n")
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
+		cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
 
 		if err := store.SetFromRequiredDotEnv(path, cfg); err != nil {
 			t.Fatalf("SetFromRequiredDotEnv returned unexpected error: %v", err)
@@ -371,7 +371,7 @@ func TestEnvStoreSetFromReader(t *testing.T) {
 	t.Run("loads values and honors parse config overwrite", func(t *testing.T) {
 		store := EnvStore{"EXISTING": "keep"}
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
+		cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
 
 		err := store.SetFromReader(strings.NewReader("EXISTING=replace\nNEW=value\n"), "reader.env", cfg)
 		if err != nil {

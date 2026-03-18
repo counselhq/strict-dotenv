@@ -86,22 +86,26 @@ All parse methods write into the receiver `EnvStore`. Parse failures return an e
 Use a `Config` when you want explicit control over global settings or per-key overrides:
 
 - `cfg := new(strictdotenv.Config)` starts with every option disabled
-- `cfg.ApplyGlobalOptions(...)` updates the global settings used for every key
-- `cfg.ApplyKeyOptions(...)` updates the settings for one exact key name
+- `cfg.MergeGlobalOptions(...)` merges fields into the global settings used for every key
+- `cfg.SetGlobalOptions(...)` replaces the global settings used for every key
+- `cfg.MergeKeyOptions(...)` merges fields into the settings for one exact key name
+- `cfg.SetKeyOptions(...)` replaces the settings for one exact key name
 
 `Options` is passed by value, but its fields are pointers. Nil fields mean
-"leave this setting alone." Key-specific options inherit from the global
-settings, so a key override only needs to mention the fields it wants to
-change. When a key is parsed or reprocessed, those pointer-based settings are
-resolved into a concrete internal option set for that key.
+"leave this setting alone" when you call a `Merge*Options` method. With
+`Set*Options`, nil fields mean "leave this field unset in the stored config."
+Key-specific options inherit from the global settings, so a key override only
+needs to mention the fields it wants to change. When a key is parsed or
+reprocessed, those pointer-based settings are resolved into a concrete internal
+option set for that key.
 
 ```go
 cfg := new(strictdotenv.Config)
-cfg.ApplyGlobalOptions(strictdotenv.Options{
+cfg.MergeGlobalOptions(strictdotenv.Options{
 	Overwrite:          new(true),
 	UnescapeBackslashN: new(true),
 })
-cfg.ApplyKeyOptions("PRIVATE_KEY", strictdotenv.Options{
+cfg.MergeKeyOptions("PRIVATE_KEY", strictdotenv.Options{
 	UnescapeBackslashN: new(false),
 	TransformCRLFToLF:  new(false),
 	TransformCRToLF:    new(false),
@@ -115,6 +119,10 @@ In that example:
 - `PRIVATE_KEY` preserves `\n`, `CRLF`, and `CR` literally while still inheriting the base `Overwrite` setting
 
 Because every option starts as `false`, you only opt into the behavior you want.
+
+Use the `Merge*Options` methods when you want incremental, non-destructive
+updates. Use the `Set*Options` methods when you want to replace the stored
+global or per-key option set and clear any fields you do not include.
 
 ## Parse Options Reference
 
@@ -178,10 +186,10 @@ A few important points:
 
 ```go
 cfg := new(strictdotenv.Config)
-cfg.ApplyGlobalOptions(strictdotenv.Options{
+cfg.MergeGlobalOptions(strictdotenv.Options{
 	UnescapeBackslashN: new(false),
 })
-cfg.ApplyKeyOptions("PRIVATE_KEY", strictdotenv.Options{
+cfg.MergeKeyOptions("PRIVATE_KEY", strictdotenv.Options{
 	UnescapeBackslashN: new(true),
 })
 
@@ -197,7 +205,7 @@ store := strictdotenv.NewEnvStore()
 store.SetFromOsEnviron(nil, nil, false)
 
 cfg := new(strictdotenv.Config)
-cfg.ApplyKeyOptions("PRIVATE_KEY", strictdotenv.Options{
+cfg.MergeKeyOptions("PRIVATE_KEY", strictdotenv.Options{
 	UnescapeBackslashN: new(true),
 })
 
@@ -222,7 +230,7 @@ import (
 func main() {
 	store := strictdotenv.NewEnvStore()
 	cfg := new(strictdotenv.Config)
-	cfg.ApplyGlobalOptions(strictdotenv.Options{Overwrite: new(true)})
+	cfg.MergeGlobalOptions(strictdotenv.Options{Overwrite: new(true)})
 
 	store.SetFromOsEnviron(nil, nil, false)
 

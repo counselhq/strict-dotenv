@@ -13,9 +13,11 @@ package strictdotenv
 
 // Config holds global parse options plus exact-key overrides.
 //
-// All options default to false (disabled). Use [Config.ApplyGlobalOptions] to
-// set a baseline that applies to every key, and [Config.ApplyKeyOptions] to add
-// per-key overrides that layer on top of that global baseline.
+// All options default to false (disabled). Use [Config.MergeGlobalOptions] to
+// incrementally build a baseline that applies to every key, [Config.SetGlobalOptions]
+// to replace that baseline outright, [Config.MergeKeyOptions] to add per-key
+// overrides that layer on top of the global baseline, or [Config.SetKeyOptions]
+// to replace one key's overrides outright.
 //
 // Option scoping for EnvStore.ProcessValue and EnvStore.ProcessValues:
 //   - [Options.Overwrite] is ignored
@@ -32,20 +34,22 @@ package strictdotenv
 // Usage:
 //
 //	cfg := new(Config)
-//	cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
-//	cfg.ApplyKeyOptions("SECRET", Options{UnescapeBackslashN: new(false)})
+//	cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
+//	cfg.MergeKeyOptions("SECRET", Options{UnescapeBackslashN: new(false)})
 type Config struct {
 	globalOptions Options
 	keyOptions    map[string]Options
 }
 
 // Options is the partial, pointer-field option set passed to
-// [Config.ApplyGlobalOptions] and [Config.ApplyKeyOptions].
+// [Config.MergeGlobalOptions], [Config.SetGlobalOptions],
+// [Config.MergeKeyOptions], and [Config.SetKeyOptions].
 //
 // Every field is a pointer so that only the fields you explicitly set are
-// applied; nil fields leave the existing value in the config unchanged. This
-// allows incremental, non-destructive configuration, for example enabling one
-// option without resetting unrelated ones.
+// stored. With the Merge* methods, nil fields leave the existing value in the
+// config unchanged. With the Set* methods, nil fields leave that option unset
+// in the stored config. This supports both incremental, non-destructive updates
+// and full replacement of an option set.
 //
 // The Unescape* fields control which backslash sequences are expanded into
 // their intended character or control action inside a value. The Transform*
@@ -92,20 +96,23 @@ type resolvedOptions struct {
 
 // ---------------------------------------------------------------------------
 // Public API for building a Config:
-//   - ApplyGlobalOptions - set or update the baseline options for all keys
-//   - ApplyKeyOptions - set or update overrides for a single named key
+//   - MergeGlobalOptions - merge fields into the baseline options for all keys
+//   - SetGlobalOptions - replace the baseline options for all keys
+//   - MergeKeyOptions - merge fields into the overrides for one named key
+//   - SetKeyOptions - replace the overrides for one named key
 // ---------------------------------------------------------------------------
 
-// ApplyGlobalOptions merges the provided options into the existing global options.
+// MergeGlobalOptions merges the provided options into the existing global options.
 // Any unset or nil fields are ignored.
 //
 // Config maintains its own copy of all options, so callers can reuse
 // and modify the same Options without affecting the Config after the call.
-func (c *Config) ApplyGlobalOptions(options Options) {
+func (c *Config) MergeGlobalOptions(options Options) {
 	c.globalOptions = mergeOptions(c.globalOptions, options)
 }
 
 // SetGlobalOptions sets or replaces the existing global options with the provided options.
+// Any field left unset or nil will be left unset in the stored global options.
 //
 // Config maintains its own copy of all options, so callers can reuse
 // and modify the same Options without affecting the Config after the call.
@@ -113,7 +120,7 @@ func (c *Config) SetGlobalOptions(options Options) {
 	c.globalOptions = mergeOptions(Options{}, options)
 }
 
-// ApplyKeyOptions merges the provided options into the per-key options for key.
+// MergeKeyOptions merges the provided options into the per-key options for key.
 // Any unset or nil fields are ignored.
 //
 // Per-key options inherit from the global options: the effective value for a field
@@ -121,7 +128,7 @@ func (c *Config) SetGlobalOptions(options Options) {
 //
 // Config maintains its own copy of all options, so callers can reuse
 // and modify the same Options without affecting the Config after the call.
-func (c *Config) ApplyKeyOptions(key string, options Options) {
+func (c *Config) MergeKeyOptions(key string, options Options) {
 	if c.keyOptions == nil {
 		c.keyOptions = make(map[string]Options)
 	}
@@ -130,6 +137,7 @@ func (c *Config) ApplyKeyOptions(key string, options Options) {
 }
 
 // SetKeyOptions sets or replaces the per-key options for key.
+// Any field left unset or nil will be left unset in the stored per-key overrides.
 //
 // Per-key options inherit from the global options: the effective value for a field
 // is the global value unless the per-key setting explicitly overrides it.

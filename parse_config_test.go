@@ -13,10 +13,10 @@ func TestConfigZeroValue(t *testing.T) {
 	}
 }
 
-func TestConfigApplyGlobalOptionsUpdatesGlobalState(t *testing.T) {
+func TestConfigMergeGlobalOptionsUpdatesGlobalState(t *testing.T) {
 	cfg := new(Config)
 
-	cfg.ApplyGlobalOptions(Options{
+	cfg.MergeGlobalOptions(Options{
 		Overwrite:          new(true),
 		UnescapeBackslashN: new(true),
 	})
@@ -41,11 +41,53 @@ func TestConfigApplyGlobalOptionsUpdatesGlobalState(t *testing.T) {
 	}
 }
 
-func TestConfigApplyGlobalOptionsClonesPointers(t *testing.T) {
+func TestConfigMergeGlobalOptionsClonesPointers(t *testing.T) {
 	overwrite := true
 	cfg := new(Config)
 
-	cfg.ApplyGlobalOptions(Options{Overwrite: &overwrite})
+	cfg.MergeGlobalOptions(Options{Overwrite: &overwrite})
+	overwrite = false
+
+	if cfg.globalOptions.Overwrite == nil || !*cfg.globalOptions.Overwrite {
+		t.Fatal("expected Config to keep its own copy of Overwrite=true")
+	}
+}
+
+func TestConfigSetGlobalOptionsReplacesGlobalState(t *testing.T) {
+	cfg := new(Config)
+
+	cfg.MergeGlobalOptions(Options{
+		Overwrite:          new(true),
+		UnescapeBackslashN: new(true),
+	})
+	cfg.SetGlobalOptions(Options{
+		TransformCRToLF: new(true),
+	})
+
+	if cfg.globalOptions.Overwrite != nil {
+		t.Fatal("expected SetGlobalOptions to clear Overwrite")
+	}
+	if cfg.globalOptions.UnescapeBackslashN != nil {
+		t.Fatal("expected SetGlobalOptions to clear UnescapeBackslashN")
+	}
+	if cfg.globalOptions.TransformCRToLF == nil || !*cfg.globalOptions.TransformCRToLF {
+		t.Fatal("expected SetGlobalOptions to store TransformCRToLF=true")
+	}
+
+	resolved := resolveOptions("KEY", cfg)
+	want := resolvedOptions{
+		TransformCRToLF: true,
+	}
+	if resolved != want {
+		t.Fatalf("resolveOptions(KEY, cfg) = %+v, want %+v", resolved, want)
+	}
+}
+
+func TestConfigSetGlobalOptionsClonesPointers(t *testing.T) {
+	overwrite := true
+	cfg := new(Config)
+
+	cfg.SetGlobalOptions(Options{Overwrite: &overwrite})
 	overwrite = false
 
 	if cfg.globalOptions.Overwrite == nil || !*cfg.globalOptions.Overwrite {
@@ -55,9 +97,9 @@ func TestConfigApplyGlobalOptionsClonesPointers(t *testing.T) {
 
 func TestConfigResolveOptionsUsesUpdatedGlobalSettingsForKeys(t *testing.T) {
 	cfg := new(Config)
-	cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashN: new(true)})
+	cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashN: new(true)})
 
-	cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
+	cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
 
 	resolved := resolveOptions("KEY", cfg)
 	want := resolvedOptions{
@@ -69,12 +111,12 @@ func TestConfigResolveOptionsUsesUpdatedGlobalSettingsForKeys(t *testing.T) {
 	}
 }
 
-func TestConfigApplyKeyOptionsMergesSameKey(t *testing.T) {
+func TestConfigMergeKeyOptionsMergesSameKey(t *testing.T) {
 	cfg := new(Config)
-	cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
+	cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
 
-	cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashN: new(true)})
-	cfg.ApplyKeyOptions("KEY", Options{TransformCRToLF: new(true)})
+	cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashN: new(true)})
+	cfg.MergeKeyOptions("KEY", Options{TransformCRToLF: new(true)})
 
 	keyOptions := cfg.keyOptions["KEY"]
 	if keyOptions.UnescapeBackslashN == nil || !*keyOptions.UnescapeBackslashN {
@@ -95,14 +137,69 @@ func TestConfigApplyKeyOptionsMergesSameKey(t *testing.T) {
 	}
 }
 
-func TestConfigApplyKeyOptionsZeroValueUsesGlobalResolution(t *testing.T) {
+func TestConfigSetKeyOptionsReplacesExistingKeyOptions(t *testing.T) {
 	cfg := new(Config)
-	cfg.ApplyGlobalOptions(Options{
+	cfg.MergeGlobalOptions(Options{
+		Overwrite:          new(true),
+		UnescapeBackslashN: new(true),
+	})
+	cfg.MergeKeyOptions("KEY", Options{
+		Overwrite:          new(false),
+		TransformCRLFToLF:  new(true),
+		TransformCRToLF:    new(true),
+		UnescapeBackslashN: new(false),
+	})
+
+	cfg.SetKeyOptions("KEY", Options{
+		TransformCRToLF: new(true),
+	})
+
+	keyOptions := cfg.keyOptions["KEY"]
+	if keyOptions.Overwrite != nil {
+		t.Fatal("expected SetKeyOptions to clear Overwrite override")
+	}
+	if keyOptions.TransformCRLFToLF != nil {
+		t.Fatal("expected SetKeyOptions to clear TransformCRLFToLF override")
+	}
+	if keyOptions.UnescapeBackslashN != nil {
+		t.Fatal("expected SetKeyOptions to clear UnescapeBackslashN override")
+	}
+	if keyOptions.TransformCRToLF == nil || !*keyOptions.TransformCRToLF {
+		t.Fatal("expected SetKeyOptions to store TransformCRToLF=true")
+	}
+
+	resolved := resolveOptions("KEY", cfg)
+	want := resolvedOptions{
+		Overwrite:          true,
+		UnescapeBackslashN: true,
+		TransformCRToLF:    true,
+	}
+	if resolved != want {
+		t.Fatalf("resolveOptions(KEY, cfg) = %+v, want %+v", resolved, want)
+	}
+}
+
+func TestConfigSetKeyOptionsClonesPointers(t *testing.T) {
+	unescapeBackslashN := true
+	cfg := new(Config)
+
+	cfg.SetKeyOptions("KEY", Options{UnescapeBackslashN: &unescapeBackslashN})
+	unescapeBackslashN = false
+
+	keyOptions := cfg.keyOptions["KEY"]
+	if keyOptions.UnescapeBackslashN == nil || !*keyOptions.UnescapeBackslashN {
+		t.Fatal("expected Config to keep its own copy of UnescapeBackslashN=true")
+	}
+}
+
+func TestConfigMergeKeyOptionsZeroValueUsesGlobalResolution(t *testing.T) {
+	cfg := new(Config)
+	cfg.MergeGlobalOptions(Options{
 		Overwrite:          new(true),
 		UnescapeBackslashN: new(true),
 	})
 
-	cfg.ApplyKeyOptions("KEY", Options{})
+	cfg.MergeKeyOptions("KEY", Options{})
 
 	keyOptions, ok := cfg.keyOptions["KEY"]
 	if !ok {
@@ -143,9 +240,9 @@ func TestConfigOverwrite(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables overwrite", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables overwrite", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
+		cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "repeated keys keep the last value",
 			dotenv: "KEY=1\nKEY=2",
@@ -153,9 +250,9 @@ func TestConfigOverwrite(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables overwrite for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables overwrite for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{Overwrite: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{Overwrite: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific overwrite",
 			dotenv: "KEY=1\nKEY=2\nOTHER=3\nOTHER=4",
@@ -165,8 +262,8 @@ func TestConfigOverwrite(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{Overwrite: new(false)})
+		cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{Overwrite: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific overwrite disable",
 			dotenv: "KEY=1\nKEY=2\nOTHER=3\nOTHER=4",
@@ -185,9 +282,9 @@ func TestConfigUnescapeBackslashBackslash(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped backslash unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped backslash unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped backslash is unescaped",
 			dotenv: "KEY=\"a\\\\b\"",
@@ -195,9 +292,9 @@ func TestConfigUnescapeBackslashBackslash(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped backslash unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped backslash unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashBackslash: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashBackslash: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped backslash unescaping",
 			dotenv: "KEY=\"a\\\\b\"\nOTHER=\"c\\\\d\"",
@@ -207,8 +304,8 @@ func TestConfigUnescapeBackslashBackslash(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashBackslash: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashBackslash: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped backslash unescaping for one key",
 			dotenv: "KEY=\"a\\\\b\"\nOTHER=\"c\\\\d\"",
@@ -227,9 +324,9 @@ func TestConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped double quote unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped double quote unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashDoubleQuote: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashDoubleQuote: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped double quote is unescaped",
 			dotenv: "KEY=\"a\\\"b\"",
@@ -237,9 +334,9 @@ func TestConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped double quote unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped double quote unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashDoubleQuote: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashDoubleQuote: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped double quote unescaping",
 			dotenv: "KEY=\"a\\\"b\"\nOTHER=\"c\\\"",
@@ -249,8 +346,8 @@ func TestConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashDoubleQuote: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashDoubleQuote: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashDoubleQuote: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashDoubleQuote: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped double quote unescaping for one key",
 			dotenv: "KEY=\"a\\\"\nOTHER=\"c\\\"d\"",
@@ -269,9 +366,9 @@ func TestConfigUnescapeBackslashSingleQuote(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped single quote unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped single quote unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashSingleQuote: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashSingleQuote: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped single quote is unescaped",
 			dotenv: `KEY="a\'b"`,
@@ -279,9 +376,9 @@ func TestConfigUnescapeBackslashSingleQuote(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped single quote unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped single quote unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashSingleQuote: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashSingleQuote: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped single quote unescaping",
 			dotenv: "KEY=\"a\\'b\"\nOTHER=\"c\\'d\"",
@@ -291,8 +388,8 @@ func TestConfigUnescapeBackslashSingleQuote(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashSingleQuote: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashSingleQuote: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashSingleQuote: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashSingleQuote: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped single quote unescaping for one key",
 			dotenv: "KEY=\"a\\'b\"\nOTHER=\"c\\'d\"",
@@ -311,9 +408,9 @@ func TestConfigUnescapeBackslashA(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped alert unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped alert unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashA: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashA: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped alert is unescaped",
 			dotenv: `KEY="a\ab"`,
@@ -321,9 +418,9 @@ func TestConfigUnescapeBackslashA(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped alert unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped alert unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashA: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashA: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped alert unescaping",
 			dotenv: "KEY=\"a\\ab\"\nOTHER=\"c\\ad\"",
@@ -333,8 +430,8 @@ func TestConfigUnescapeBackslashA(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashA: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashA: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashA: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashA: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped alert unescaping for one key",
 			dotenv: "KEY=\"a\\ab\"\nOTHER=\"c\\ad\"",
@@ -353,9 +450,9 @@ func TestConfigUnescapeBackslashB(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped backspace unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped backspace unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashB: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashB: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped backspace is unescaped",
 			dotenv: `KEY="a\bb"`,
@@ -363,9 +460,9 @@ func TestConfigUnescapeBackslashB(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped backspace unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped backspace unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashB: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashB: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped backspace unescaping",
 			dotenv: "KEY=\"a\\bb\"\nOTHER=\"c\\bd\"",
@@ -375,8 +472,8 @@ func TestConfigUnescapeBackslashB(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashB: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashB: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashB: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashB: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped backspace unescaping for one key",
 			dotenv: "KEY=\"a\\bb\"\nOTHER=\"c\\bd\"",
@@ -395,9 +492,9 @@ func TestConfigUnescapeBackslashF(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped form feed unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped form feed unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashF: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped form feed is unescaped",
 			dotenv: `KEY="a\fb"`,
@@ -405,9 +502,9 @@ func TestConfigUnescapeBackslashF(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped form feed unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped form feed unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashF: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped form feed unescaping",
 			dotenv: "KEY=\"a\\fb\"\nOTHER=\"c\\fd\"",
@@ -417,8 +514,8 @@ func TestConfigUnescapeBackslashF(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashF: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashF: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashF: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashF: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped form feed unescaping for one key",
 			dotenv: "KEY=\"a\\fb\"\nOTHER=\"c\\fd\"",
@@ -437,9 +534,9 @@ func TestConfigUnescapeBackslashN(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped line feed unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped line feed unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashN: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashN: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped line feed is unescaped",
 			dotenv: `KEY="a\nb"`,
@@ -447,9 +544,9 @@ func TestConfigUnescapeBackslashN(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped line feed unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped line feed unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashN: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashN: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped line feed unescaping",
 			dotenv: "KEY=\"a\\nb\"\nOTHER=\"c\\nd\"",
@@ -459,8 +556,8 @@ func TestConfigUnescapeBackslashN(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashN: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashN: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashN: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashN: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped line feed unescaping for one key",
 			dotenv: "KEY=\"a\\nb\"\nOTHER=\"c\\nd\"",
@@ -479,9 +576,9 @@ func TestConfigUnescapeBackslashR(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped carriage return unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped carriage return unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashR: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashR: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped carriage return is unescaped",
 			dotenv: `KEY="a\rb"`,
@@ -489,9 +586,9 @@ func TestConfigUnescapeBackslashR(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped carriage return unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped carriage return unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashR: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashR: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped carriage return unescaping",
 			dotenv: "KEY=\"a\\rb\"\nOTHER=\"c\\rd\"",
@@ -501,8 +598,8 @@ func TestConfigUnescapeBackslashR(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashR: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashR: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashR: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashR: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped carriage return unescaping for one key",
 			dotenv: "KEY=\"a\\rb\"\nOTHER=\"c\\rd\"",
@@ -521,9 +618,9 @@ func TestConfigUnescapeBackslashT(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped tab unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped tab unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashT: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashT: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped tab is unescaped",
 			dotenv: `KEY="a\tb"`,
@@ -531,9 +628,9 @@ func TestConfigUnescapeBackslashT(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped tab unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped tab unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashT: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashT: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped tab unescaping",
 			dotenv: "KEY=\"a\\tb\"\nOTHER=\"c\\td\"",
@@ -543,8 +640,8 @@ func TestConfigUnescapeBackslashT(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashT: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashT: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashT: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashT: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped tab unescaping for one key",
 			dotenv: "KEY=\"a\\tb\"\nOTHER=\"c\\td\"",
@@ -563,9 +660,9 @@ func TestConfigUnescapeBackslashV(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables escaped vertical tab unescaping", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables escaped vertical tab unescaping", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashV: new(true)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashV: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped vertical tab is unescaped",
 			dotenv: `KEY="a\vb"`,
@@ -573,9 +670,9 @@ func TestConfigUnescapeBackslashV(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables escaped vertical tab unescaping for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables escaped vertical tab unescaping for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashV: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashV: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped vertical tab unescaping",
 			dotenv: "KEY=\"a\\vb\"\nOTHER=\"c\\vd\"",
@@ -585,8 +682,8 @@ func TestConfigUnescapeBackslashV(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{UnescapeBackslashV: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashV: new(false)})
+		cfg.MergeGlobalOptions(Options{UnescapeBackslashV: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{UnescapeBackslashV: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped vertical tab unescaping for one key",
 			dotenv: "KEY=\"a\\vb\"\nOTHER=\"c\\vd\"",
@@ -605,9 +702,9 @@ func TestConfigTransformCRLFToLF(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables CRLF normalization", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables CRLF normalization", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{TransformCRLFToLF: new(true)})
+		cfg.MergeGlobalOptions(Options{TransformCRLFToLF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "literal CRLF becomes LF",
 			dotenv: "KEY=\"a\r\nb\"",
@@ -615,9 +712,9 @@ func TestConfigTransformCRLFToLF(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables CRLF normalization for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables CRLF normalization for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{TransformCRLFToLF: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{TransformCRLFToLF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific CRLF normalization",
 			dotenv: "KEY=\"a\r\nb\"\nOTHER=\"c\r\nd\"",
@@ -627,8 +724,8 @@ func TestConfigTransformCRLFToLF(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{TransformCRLFToLF: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{TransformCRLFToLF: new(false)})
+		cfg.MergeGlobalOptions(Options{TransformCRLFToLF: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{TransformCRLFToLF: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable CRLF normalization for one key",
 			dotenv: "KEY=\"a\r\nb\"\nOTHER=\"c\r\nd\"",
@@ -647,9 +744,9 @@ func TestConfigTransformCRToLF(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyGlobalOptions enables CR normalization", func(t *testing.T) {
+	t.Run("MergeGlobalOptions enables CR normalization", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{TransformCRToLF: new(true)})
+		cfg.MergeGlobalOptions(Options{TransformCRToLF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "literal CR becomes LF",
 			dotenv: "KEY=\"a\rb\"",
@@ -657,9 +754,9 @@ func TestConfigTransformCRToLF(t *testing.T) {
 		})
 	})
 
-	t.Run("ApplyKeyOptions enables CR normalization for one key", func(t *testing.T) {
+	t.Run("MergeKeyOptions enables CR normalization for one key", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyKeyOptions("KEY", Options{TransformCRToLF: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{TransformCRToLF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific CR normalization",
 			dotenv: "KEY=\"a\rb\"\nOTHER=\"c\rd\"",
@@ -669,8 +766,8 @@ func TestConfigTransformCRToLF(t *testing.T) {
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
 		cfg := new(Config)
-		cfg.ApplyGlobalOptions(Options{TransformCRToLF: new(true)})
-		cfg.ApplyKeyOptions("KEY", Options{TransformCRToLF: new(false)})
+		cfg.MergeGlobalOptions(Options{TransformCRToLF: new(true)})
+		cfg.MergeKeyOptions("KEY", Options{TransformCRToLF: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable CR normalization for one key",
 			dotenv: "KEY=\"a\rb\"\nOTHER=\"c\rd\"",
@@ -681,7 +778,7 @@ func TestConfigTransformCRToLF(t *testing.T) {
 
 func TestConfigAppliesTransformsAfterUnescaping(t *testing.T) {
 	cfg := new(Config)
-	cfg.ApplyGlobalOptions(Options{
+	cfg.MergeGlobalOptions(Options{
 		UnescapeBackslashR: new(true),
 		UnescapeBackslashN: new(true),
 		TransformCRLFToLF:  new(true),
@@ -697,7 +794,7 @@ func TestConfigAppliesTransformsAfterUnescaping(t *testing.T) {
 
 func TestConfigTransformCRWithoutCRLFTransformProducesTwoLFBytes(t *testing.T) {
 	cfg := new(Config)
-	cfg.ApplyGlobalOptions(Options{TransformCRToLF: new(true)})
+	cfg.MergeGlobalOptions(Options{TransformCRToLF: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "CRLF becomes two LF bytes when only CR normalization is enabled",
