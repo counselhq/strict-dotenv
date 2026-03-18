@@ -96,39 +96,60 @@ type resolvedOptions struct {
 //   - ApplyKeyOptions - set or update overrides for a single named key
 // ---------------------------------------------------------------------------
 
-// ApplyGlobalOptions merges overrides into the global baseline.
+// ApplyGlobalOptions merges the provided options into the existing global options.
+// Any unset or nil fields are ignored.
 //
-// Only non-nil fields in overrides are applied; nil fields leave the current
-// global value unchanged.
-func (c *Config) ApplyGlobalOptions(overrides Options) {
-	c.globalOptions = mergeOptions(c.globalOptions, overrides)
+// Config maintains its own copy of all options, so callers can reuse
+// and modify the same Options without affecting the Config after the call.
+func (c *Config) ApplyGlobalOptions(options Options) {
+	c.globalOptions = mergeOptions(c.globalOptions, options)
 }
 
-// ApplyKeyOptions merges overrides into the per-key options for key.
+// SetGlobalOptions sets or replaces the existing global options with the provided options.
 //
-// Per-key options inherit from the current global baseline: the effective value
-// for a field is the global value unless the per-key setting explicitly
-// overrides it. Calling ApplyGlobalOptions after ApplyKeyOptions still affects
-// keys that did not override the changed fields.
+// Config maintains its own copy of all options, so callers can reuse
+// and modify the same Options without affecting the Config after the call.
+func (c *Config) SetGlobalOptions(options Options) {
+	c.globalOptions = mergeOptions(Options{}, options)
+}
+
+// ApplyKeyOptions merges the provided options into the per-key options for key.
+// Any unset or nil fields are ignored.
 //
-// Only non-nil fields in overrides are applied. Passing a zero-value Options
-// registers key without changing any of its options, which is useful when you
-// want the key to inherit all current and future global settings explicitly.
-func (c *Config) ApplyKeyOptions(key string, overrides Options) {
+// Per-key options inherit from the global options: the effective value for a field
+// is the global value unless the per-key setting explicitly overrides it.
+//
+// Config maintains its own copy of all options, so callers can reuse
+// and modify the same Options without affecting the Config after the call.
+func (c *Config) ApplyKeyOptions(key string, options Options) {
 	if c.keyOptions == nil {
 		c.keyOptions = make(map[string]Options)
 	}
 
-	c.keyOptions[key] = mergeOptions(c.keyOptions[key], overrides)
+	c.keyOptions[key] = mergeOptions(c.keyOptions[key], options)
+}
+
+// SetKeyOptions sets or replaces the per-key options for key.
+//
+// Per-key options inherit from the global options: the effective value for a field
+// is the global value unless the per-key setting explicitly overrides it.
+//
+// Config maintains its own copy of all options, so callers can reuse
+// and modify the same Options without affecting the Config after the call.
+func (c *Config) SetKeyOptions(key string, options Options) {
+	if c.keyOptions == nil {
+		c.keyOptions = make(map[string]Options)
+	}
+
+	c.keyOptions[key] = mergeOptions(Options{}, options)
 }
 
 // ---------------------------------------------------------------------------
 // Internal helpers for building/resolving a Config
 // ---------------------------------------------------------------------------
 
-// mergeOptions copies overrides's non-nil fields onto base and returns the
-// result. base is passed by value so the original is never mutated. Applied
-// pointer fields are deep-copied so the stored Options owns its memory.
+// mergeOptions safely merges overrides onto the desired base Options.
+// Pointer fields are deep-copied so the stored Options owns its memory.
 func mergeOptions(base, overrides Options) Options {
 	if overrides.Overwrite != nil {
 		base.Overwrite = new(*overrides.Overwrite)
