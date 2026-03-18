@@ -12,12 +12,12 @@ import (
 // Tokens
 // ----------------------------------------------------------------------------
 
-type Pos int
+type pos int
 
 type token struct {
 	typ   tokenType // the category of token (key, comment, etc.)
-	start Pos       // byte offset where the token starts in lexer's bytes
-	end   Pos       // byte offset where the token ends in lexer's bytes
+	start pos       // byte offset where the token starts in lexer's bytes
+	end   pos       // byte offset where the token ends in lexer's bytes
 	line  int       // line number for error reporting
 	err   string    // error message for error reporting
 }
@@ -125,9 +125,9 @@ type lexer struct {
 	name  string // name of the file | named pipe | reader source
 	bytes []byte // raw bytes being scanned
 
-	pos       Pos  // current byte offset in bytes; advances forward as runes are consumed
+	pos       pos  // current byte offset in bytes; advances forward as runes are consumed
 	lastWidth int  // byte width of the rune most recently returned by next(); used by backup()
-	start     Pos  // byte offset where the current (not-yet-emitted) token begins
+	start     pos  // byte offset where the current (not-yet-emitted) token begins
 	atEOF     bool // true after next() returns eof, prevents double-backup past the end
 
 	line      int // current line number (1-based), incremented on each line terminator
@@ -203,7 +203,7 @@ func (l *lexer) next() rune {
 
 	r, w := utf8.DecodeRune(l.bytes[l.pos:])
 	l.lastWidth = w
-	l.pos += Pos(w)
+	l.pos += pos(w)
 	return r
 }
 
@@ -228,7 +228,7 @@ func (l *lexer) backup() {
 	if l.lastWidth == 0 {
 		return
 	}
-	l.pos -= Pos(l.lastWidth)
+	l.pos -= pos(l.lastWidth)
 	l.lastWidth = 0
 	if b := l.bytes[l.pos]; b == '\n' || b == '\r' {
 		l.line--
@@ -310,7 +310,7 @@ type stateFn func(*lexer) stateFn
 // If no BOM is present, it immediately delegates to lexLineStart.
 func lexStart(l *lexer) stateFn {
 	if l.pos == 0 && bytes.HasPrefix(l.bytes, bomPrefix) {
-		l.pos += Pos(len(bomPrefix))
+		l.pos += pos(len(bomPrefix))
 		l.emit(tokenBOM)
 		return lexLineStart
 	}
@@ -528,7 +528,7 @@ func lexUnquotedValue(l *lexer) stateFn {
 			break
 		}
 
-		scanPos += Pos(w)
+		scanPos += pos(w)
 		if r == ' ' || r == '\t' {
 			prevWasWhitespace = true
 		} else {
