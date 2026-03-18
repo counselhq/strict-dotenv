@@ -2,89 +2,81 @@ package strictdotenv
 
 import "testing"
 
-func TestParseConfigZeroValue(t *testing.T) {
-	cfg := new(ParseConfig)
+func TestConfigZeroValue(t *testing.T) {
+	cfg := new(Config)
 
-	if cfg.GlobalOptions != (ParseOptions{}) {
-		t.Errorf("GlobalOptions = %+v, want zero ParseOptions", cfg.GlobalOptions)
+	if cfg.globalOptions != (Options{}) {
+		t.Errorf("globalOptions = %+v, want zero Options", cfg.globalOptions)
 	}
-	if cfg.KeyOptions != nil {
-		t.Errorf("KeyOptions = %v, want nil", cfg.KeyOptions)
-	}
-	if cfg.resolvedGlobalOptions != (resolvedParseOptions{}) {
-		t.Errorf("resolvedGlobalOptions = %+v, want zero resolvedParseOptions", cfg.resolvedGlobalOptions)
-	}
-	if cfg.resolvedKeyOptions != nil {
-		t.Errorf("resolvedKeyOptions = %v, want nil", cfg.resolvedKeyOptions)
+	if cfg.keyOptions != nil {
+		t.Errorf("keyOptions = %v, want nil", cfg.keyOptions)
 	}
 }
 
-func TestParseConfigApplyGlobalOptionsUpdatesResolvedState(t *testing.T) {
-	cfg := new(ParseConfig)
+func TestConfigApplyGlobalOptionsUpdatesGlobalState(t *testing.T) {
+	cfg := new(Config)
 
-	cfg.ApplyGlobalOptions(&ParseOptions{
+	cfg.ApplyGlobalOptions(Options{
 		Overwrite:          new(true),
 		UnescapeBackslashN: new(true),
 	})
 
-	if cfg.GlobalOptions.Overwrite == nil || !*cfg.GlobalOptions.Overwrite {
-		t.Fatal("expected GlobalOptions.Overwrite=true")
+	if cfg.globalOptions.Overwrite == nil || !*cfg.globalOptions.Overwrite {
+		t.Fatal("expected globalOptions.Overwrite=true")
 	}
-	if cfg.GlobalOptions.UnescapeBackslashN == nil || !*cfg.GlobalOptions.UnescapeBackslashN {
-		t.Fatal("expected GlobalOptions.UnescapeBackslashN=true")
+	if cfg.globalOptions.UnescapeBackslashN == nil || !*cfg.globalOptions.UnescapeBackslashN {
+		t.Fatal("expected globalOptions.UnescapeBackslashN=true")
 	}
-	if cfg.GlobalOptions.TransformCRToLF != nil {
-		t.Fatal("expected unrelated GlobalOptions field to remain nil")
+	if cfg.globalOptions.TransformCRToLF != nil {
+		t.Fatal("expected unrelated globalOptions field to remain nil")
 	}
-	if !cfg.resolvedGlobalOptions.Overwrite {
-		t.Fatal("expected resolvedGlobalOptions.Overwrite=true")
+
+	resolved := resolveOptions("KEY", cfg)
+	want := resolvedOptions{
+		Overwrite:          true,
+		UnescapeBackslashN: true,
 	}
-	if !cfg.resolvedGlobalOptions.UnescapeBackslashN {
-		t.Fatal("expected resolvedGlobalOptions.UnescapeBackslashN=true")
-	}
-	if cfg.resolvedGlobalOptions.TransformCRToLF {
-		t.Fatal("expected resolvedGlobalOptions.TransformCRToLF=false")
+	if resolved != want {
+		t.Fatalf("resolveOptions(KEY, cfg) = %+v, want %+v", resolved, want)
 	}
 }
 
-func TestParseConfigApplyGlobalOptionsClonesPointers(t *testing.T) {
+func TestConfigApplyGlobalOptionsClonesPointers(t *testing.T) {
 	overwrite := true
-	cfg := new(ParseConfig)
+	cfg := new(Config)
 
-	cfg.ApplyGlobalOptions(&ParseOptions{Overwrite: &overwrite})
+	cfg.ApplyGlobalOptions(Options{Overwrite: &overwrite})
 	overwrite = false
 
-	if cfg.GlobalOptions.Overwrite == nil || !*cfg.GlobalOptions.Overwrite {
-		t.Fatal("expected ParseConfig to keep its own copy of Overwrite=true")
+	if cfg.globalOptions.Overwrite == nil || !*cfg.globalOptions.Overwrite {
+		t.Fatal("expected Config to keep its own copy of Overwrite=true")
 	}
 }
 
-func TestParseConfigApplyGlobalOptionsRefreshesResolvedKeyOptions(t *testing.T) {
-	cfg := new(ParseConfig)
-	cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashN: new(true)})
+func TestConfigResolveOptionsUsesUpdatedGlobalSettingsForKeys(t *testing.T) {
+	cfg := new(Config)
+	cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashN: new(true)})
 
-	cfg.ApplyGlobalOptions(&ParseOptions{Overwrite: new(true)})
+	cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
 
-	keyOptions, ok := cfg.resolvedKeyOptions["KEY"]
-	if !ok {
-		t.Fatal("expected KEY resolved options to be present")
+	resolved := resolveOptions("KEY", cfg)
+	want := resolvedOptions{
+		Overwrite:          true,
+		UnescapeBackslashN: true,
 	}
-	if !keyOptions.Overwrite {
-		t.Fatal("expected KEY to inherit resolved global Overwrite=true")
-	}
-	if !keyOptions.UnescapeBackslashN {
-		t.Fatal("expected KEY-specific UnescapeBackslashN=true to be preserved")
+	if resolved != want {
+		t.Fatalf("resolveOptions(KEY, cfg) = %+v, want %+v", resolved, want)
 	}
 }
 
-func TestParseConfigApplyKeyOptionsMergesSameKey(t *testing.T) {
-	cfg := new(ParseConfig)
-	cfg.ApplyGlobalOptions(&ParseOptions{Overwrite: new(true)})
+func TestConfigApplyKeyOptionsMergesSameKey(t *testing.T) {
+	cfg := new(Config)
+	cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
 
-	cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashN: new(true)})
-	cfg.ApplyKeyOptions("KEY", &ParseOptions{TransformCRToLF: new(true)})
+	cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashN: new(true)})
+	cfg.ApplyKeyOptions("KEY", Options{TransformCRToLF: new(true)})
 
-	keyOptions := cfg.KeyOptions["KEY"]
+	keyOptions := cfg.keyOptions["KEY"]
 	if keyOptions.UnescapeBackslashN == nil || !*keyOptions.UnescapeBackslashN {
 		t.Fatal("expected KEY UnescapeBackslashN=true after merging key options")
 	}
@@ -92,42 +84,48 @@ func TestParseConfigApplyKeyOptionsMergesSameKey(t *testing.T) {
 		t.Fatal("expected KEY TransformCRToLF=true after merging key options")
 	}
 
-	resolved := cfg.resolvedKeyOptions["KEY"]
-	if !resolved.Overwrite {
-		t.Fatal("expected KEY to inherit Overwrite=true from global options")
+	resolved := resolveOptions("KEY", cfg)
+	want := resolvedOptions{
+		Overwrite:          true,
+		UnescapeBackslashN: true,
+		TransformCRToLF:    true,
 	}
-	if !resolved.UnescapeBackslashN {
-		t.Fatal("expected KEY resolved UnescapeBackslashN=true")
-	}
-	if !resolved.TransformCRToLF {
-		t.Fatal("expected KEY resolved TransformCRToLF=true")
+	if resolved != want {
+		t.Fatalf("resolveOptions(KEY, cfg) = %+v, want %+v", resolved, want)
 	}
 }
 
-func TestParseConfigApplyKeyOptionsNilOverridesUsesGlobalResolution(t *testing.T) {
-	cfg := new(ParseConfig)
-	cfg.ApplyGlobalOptions(&ParseOptions{
+func TestConfigApplyKeyOptionsZeroValueUsesGlobalResolution(t *testing.T) {
+	cfg := new(Config)
+	cfg.ApplyGlobalOptions(Options{
 		Overwrite:          new(true),
 		UnescapeBackslashN: new(true),
 	})
 
-	cfg.ApplyKeyOptions("KEY", nil)
+	cfg.ApplyKeyOptions("KEY", Options{})
 
-	keyOptions, ok := cfg.KeyOptions["KEY"]
+	keyOptions, ok := cfg.keyOptions["KEY"]
 	if !ok {
 		t.Fatal("expected KEY options to exist")
 	}
-	if keyOptions != (ParseOptions{}) {
-		t.Fatalf("KEY options = %+v, want zero ParseOptions", keyOptions)
+	if keyOptions != (Options{}) {
+		t.Fatalf("KEY options = %+v, want zero Options", keyOptions)
 	}
 
-	if cfg.resolvedKeyOptions["KEY"] != cfg.resolvedGlobalOptions {
-		t.Fatalf("resolvedKeyOptions[KEY] = %+v, want %+v",
-			cfg.resolvedKeyOptions["KEY"], cfg.resolvedGlobalOptions)
+	resolved := resolveOptions("KEY", cfg)
+	global := resolveOptions("OTHER", cfg)
+	if resolved != global {
+		t.Fatalf("resolveOptions(KEY, cfg) = %+v, want %+v", resolved, global)
 	}
 }
 
-func TestNilParseConfigUsesZeroValueOptions(t *testing.T) {
+func TestResolveOptionsNilConfigReturnsZeroValue(t *testing.T) {
+	if got := resolveOptions("KEY", nil); got != (resolvedOptions{}) {
+		t.Fatalf("resolveOptions(KEY, nil) = %+v, want zero resolvedOptions", got)
+	}
+}
+
+func TestNilConfigUsesZeroValueOptions(t *testing.T) {
 	run(t, nil, nil, testCase{
 		name:   "nil config preserves literal escapes",
 		dotenv: "KEY=\"line1\\nline2\"",
@@ -135,9 +133,9 @@ func TestNilParseConfigUsesZeroValueOptions(t *testing.T) {
 	})
 }
 
-func TestParseConfigOverwrite(t *testing.T) {
+func TestConfigOverwrite(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "repeated keys keep the first value",
 			dotenv: "KEY=1\nKEY=2",
@@ -146,8 +144,8 @@ func TestParseConfigOverwrite(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables overwrite", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{Overwrite: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "repeated keys keep the last value",
 			dotenv: "KEY=1\nKEY=2",
@@ -156,8 +154,8 @@ func TestParseConfigOverwrite(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables overwrite for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{Overwrite: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{Overwrite: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific overwrite",
 			dotenv: "KEY=1\nKEY=2\nOTHER=3\nOTHER=4",
@@ -166,9 +164,9 @@ func TestParseConfigOverwrite(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{Overwrite: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{Overwrite: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{Overwrite: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{Overwrite: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific overwrite disable",
 			dotenv: "KEY=1\nKEY=2\nOTHER=3\nOTHER=4",
@@ -177,9 +175,9 @@ func TestParseConfigOverwrite(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashBackslash(t *testing.T) {
+func TestConfigUnescapeBackslashBackslash(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "escaped backslash stays literal",
 			dotenv: "KEY=\"a\\\\b\"",
@@ -188,8 +186,8 @@ func TestParseConfigUnescapeBackslashBackslash(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped backslash unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashBackslash: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped backslash is unescaped",
 			dotenv: "KEY=\"a\\\\b\"",
@@ -198,8 +196,8 @@ func TestParseConfigUnescapeBackslashBackslash(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped backslash unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashBackslash: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashBackslash: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped backslash unescaping",
 			dotenv: "KEY=\"a\\\\b\"\nOTHER=\"c\\\\d\"",
@@ -208,9 +206,9 @@ func TestParseConfigUnescapeBackslashBackslash(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashBackslash: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashBackslash: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashBackslash: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped backslash unescaping for one key",
 			dotenv: "KEY=\"a\\\\b\"\nOTHER=\"c\\\\d\"",
@@ -219,9 +217,9 @@ func TestParseConfigUnescapeBackslashBackslash(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashDoubleQuote(t *testing.T) {
+func TestConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "backslash before closing double quote is literal; the double quote closes the value",
 			dotenv: "KEY=\"a\\\"",
@@ -230,8 +228,8 @@ func TestParseConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped double quote unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashDoubleQuote: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashDoubleQuote: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped double quote is unescaped",
 			dotenv: "KEY=\"a\\\"b\"",
@@ -240,8 +238,8 @@ func TestParseConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped double quote unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashDoubleQuote: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashDoubleQuote: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped double quote unescaping",
 			dotenv: "KEY=\"a\\\"b\"\nOTHER=\"c\\\"",
@@ -250,9 +248,9 @@ func TestParseConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashDoubleQuote: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashDoubleQuote: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashDoubleQuote: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashDoubleQuote: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped double quote unescaping for one key",
 			dotenv: "KEY=\"a\\\"\nOTHER=\"c\\\"d\"",
@@ -261,9 +259,9 @@ func TestParseConfigUnescapeBackslashDoubleQuote(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashSingleQuote(t *testing.T) {
+func TestConfigUnescapeBackslashSingleQuote(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "escaped single quote stays literal",
 			dotenv: `KEY="a\'b"`,
@@ -272,8 +270,8 @@ func TestParseConfigUnescapeBackslashSingleQuote(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped single quote unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashSingleQuote: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashSingleQuote: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped single quote is unescaped",
 			dotenv: `KEY="a\'b"`,
@@ -282,8 +280,8 @@ func TestParseConfigUnescapeBackslashSingleQuote(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped single quote unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashSingleQuote: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashSingleQuote: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped single quote unescaping",
 			dotenv: "KEY=\"a\\'b\"\nOTHER=\"c\\'d\"",
@@ -292,9 +290,9 @@ func TestParseConfigUnescapeBackslashSingleQuote(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashSingleQuote: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashSingleQuote: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashSingleQuote: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashSingleQuote: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped single quote unescaping for one key",
 			dotenv: "KEY=\"a\\'b\"\nOTHER=\"c\\'d\"",
@@ -303,9 +301,9 @@ func TestParseConfigUnescapeBackslashSingleQuote(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashA(t *testing.T) {
+func TestConfigUnescapeBackslashA(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "escaped alert stays literal",
 			dotenv: `KEY="a\ab"`,
@@ -314,8 +312,8 @@ func TestParseConfigUnescapeBackslashA(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped alert unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashA: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashA: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped alert is unescaped",
 			dotenv: `KEY="a\ab"`,
@@ -324,8 +322,8 @@ func TestParseConfigUnescapeBackslashA(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped alert unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashA: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashA: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped alert unescaping",
 			dotenv: "KEY=\"a\\ab\"\nOTHER=\"c\\ad\"",
@@ -334,9 +332,9 @@ func TestParseConfigUnescapeBackslashA(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashA: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashA: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashA: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashA: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped alert unescaping for one key",
 			dotenv: "KEY=\"a\\ab\"\nOTHER=\"c\\ad\"",
@@ -345,9 +343,9 @@ func TestParseConfigUnescapeBackslashA(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashB(t *testing.T) {
+func TestConfigUnescapeBackslashB(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "escaped backspace stays literal",
 			dotenv: `KEY="a\bb"`,
@@ -356,8 +354,8 @@ func TestParseConfigUnescapeBackslashB(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped backspace unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashB: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashB: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped backspace is unescaped",
 			dotenv: `KEY="a\bb"`,
@@ -366,8 +364,8 @@ func TestParseConfigUnescapeBackslashB(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped backspace unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashB: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashB: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped backspace unescaping",
 			dotenv: "KEY=\"a\\bb\"\nOTHER=\"c\\bd\"",
@@ -376,9 +374,9 @@ func TestParseConfigUnescapeBackslashB(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashB: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashB: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashB: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashB: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped backspace unescaping for one key",
 			dotenv: "KEY=\"a\\bb\"\nOTHER=\"c\\bd\"",
@@ -387,9 +385,9 @@ func TestParseConfigUnescapeBackslashB(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashF(t *testing.T) {
+func TestConfigUnescapeBackslashF(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "escaped form feed stays literal",
 			dotenv: `KEY="a\fb"`,
@@ -398,8 +396,8 @@ func TestParseConfigUnescapeBackslashF(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped form feed unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashF: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped form feed is unescaped",
 			dotenv: `KEY="a\fb"`,
@@ -408,8 +406,8 @@ func TestParseConfigUnescapeBackslashF(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped form feed unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashF: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped form feed unescaping",
 			dotenv: "KEY=\"a\\fb\"\nOTHER=\"c\\fd\"",
@@ -418,9 +416,9 @@ func TestParseConfigUnescapeBackslashF(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashF: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashF: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashF: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashF: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped form feed unescaping for one key",
 			dotenv: "KEY=\"a\\fb\"\nOTHER=\"c\\fd\"",
@@ -429,9 +427,9 @@ func TestParseConfigUnescapeBackslashF(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashN(t *testing.T) {
+func TestConfigUnescapeBackslashN(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "escaped line feed stays literal",
 			dotenv: `KEY="a\nb"`,
@@ -440,8 +438,8 @@ func TestParseConfigUnescapeBackslashN(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped line feed unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashN: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashN: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped line feed is unescaped",
 			dotenv: `KEY="a\nb"`,
@@ -450,8 +448,8 @@ func TestParseConfigUnescapeBackslashN(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped line feed unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashN: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashN: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped line feed unescaping",
 			dotenv: "KEY=\"a\\nb\"\nOTHER=\"c\\nd\"",
@@ -460,9 +458,9 @@ func TestParseConfigUnescapeBackslashN(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashN: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashN: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashN: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashN: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped line feed unescaping for one key",
 			dotenv: "KEY=\"a\\nb\"\nOTHER=\"c\\nd\"",
@@ -471,9 +469,9 @@ func TestParseConfigUnescapeBackslashN(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashR(t *testing.T) {
+func TestConfigUnescapeBackslashR(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "escaped carriage return stays literal",
 			dotenv: `KEY="a\rb"`,
@@ -482,8 +480,8 @@ func TestParseConfigUnescapeBackslashR(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped carriage return unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashR: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashR: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped carriage return is unescaped",
 			dotenv: `KEY="a\rb"`,
@@ -492,8 +490,8 @@ func TestParseConfigUnescapeBackslashR(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped carriage return unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashR: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashR: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped carriage return unescaping",
 			dotenv: "KEY=\"a\\rb\"\nOTHER=\"c\\rd\"",
@@ -502,9 +500,9 @@ func TestParseConfigUnescapeBackslashR(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashR: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashR: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashR: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashR: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped carriage return unescaping for one key",
 			dotenv: "KEY=\"a\\rb\"\nOTHER=\"c\\rd\"",
@@ -513,9 +511,9 @@ func TestParseConfigUnescapeBackslashR(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashT(t *testing.T) {
+func TestConfigUnescapeBackslashT(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "escaped tab stays literal",
 			dotenv: `KEY="a\tb"`,
@@ -524,8 +522,8 @@ func TestParseConfigUnescapeBackslashT(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped tab unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashT: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashT: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped tab is unescaped",
 			dotenv: `KEY="a\tb"`,
@@ -534,8 +532,8 @@ func TestParseConfigUnescapeBackslashT(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped tab unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashT: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashT: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped tab unescaping",
 			dotenv: "KEY=\"a\\tb\"\nOTHER=\"c\\td\"",
@@ -544,9 +542,9 @@ func TestParseConfigUnescapeBackslashT(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashT: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashT: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashT: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashT: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped tab unescaping for one key",
 			dotenv: "KEY=\"a\\tb\"\nOTHER=\"c\\td\"",
@@ -555,9 +553,9 @@ func TestParseConfigUnescapeBackslashT(t *testing.T) {
 	})
 }
 
-func TestParseConfigUnescapeBackslashV(t *testing.T) {
+func TestConfigUnescapeBackslashV(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "escaped vertical tab stays literal",
 			dotenv: `KEY="a\vb"`,
@@ -566,8 +564,8 @@ func TestParseConfigUnescapeBackslashV(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables escaped vertical tab unescaping", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashV: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashV: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "escaped vertical tab is unescaped",
 			dotenv: `KEY="a\vb"`,
@@ -576,8 +574,8 @@ func TestParseConfigUnescapeBackslashV(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables escaped vertical tab unescaping for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashV: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashV: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific escaped vertical tab unescaping",
 			dotenv: "KEY=\"a\\vb\"\nOTHER=\"c\\vd\"",
@@ -586,9 +584,9 @@ func TestParseConfigUnescapeBackslashV(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{UnescapeBackslashV: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{UnescapeBackslashV: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{UnescapeBackslashV: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{UnescapeBackslashV: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable escaped vertical tab unescaping for one key",
 			dotenv: "KEY=\"a\\vb\"\nOTHER=\"c\\vd\"",
@@ -597,9 +595,9 @@ func TestParseConfigUnescapeBackslashV(t *testing.T) {
 	})
 }
 
-func TestParseConfigTransformCRLFToLF(t *testing.T) {
+func TestConfigTransformCRLFToLF(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "literal CRLF stays unchanged",
 			dotenv: "KEY=\"a\r\nb\"",
@@ -608,8 +606,8 @@ func TestParseConfigTransformCRLFToLF(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables CRLF normalization", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{TransformCRLFToLF: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{TransformCRLFToLF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "literal CRLF becomes LF",
 			dotenv: "KEY=\"a\r\nb\"",
@@ -618,8 +616,8 @@ func TestParseConfigTransformCRLFToLF(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables CRLF normalization for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{TransformCRLFToLF: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{TransformCRLFToLF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific CRLF normalization",
 			dotenv: "KEY=\"a\r\nb\"\nOTHER=\"c\r\nd\"",
@@ -628,9 +626,9 @@ func TestParseConfigTransformCRLFToLF(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{TransformCRLFToLF: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{TransformCRLFToLF: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{TransformCRLFToLF: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{TransformCRLFToLF: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable CRLF normalization for one key",
 			dotenv: "KEY=\"a\r\nb\"\nOTHER=\"c\r\nd\"",
@@ -639,9 +637,9 @@ func TestParseConfigTransformCRLFToLF(t *testing.T) {
 	})
 }
 
-func TestParseConfigTransformCRToLF(t *testing.T) {
+func TestConfigTransformCRToLF(t *testing.T) {
 	t.Run("all options disabled by default", func(t *testing.T) {
-		cfg := new(ParseConfig)
+		cfg := new(Config)
 		run(t, nil, cfg, testCase{
 			name:   "literal CR stays unchanged",
 			dotenv: "KEY=\"a\rb\"",
@@ -650,8 +648,8 @@ func TestParseConfigTransformCRToLF(t *testing.T) {
 	})
 
 	t.Run("ApplyGlobalOptions enables CR normalization", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{TransformCRToLF: new(true)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{TransformCRToLF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "literal CR becomes LF",
 			dotenv: "KEY=\"a\rb\"",
@@ -660,8 +658,8 @@ func TestParseConfigTransformCRToLF(t *testing.T) {
 	})
 
 	t.Run("ApplyKeyOptions enables CR normalization for one key", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{TransformCRToLF: new(true)})
+		cfg := new(Config)
+		cfg.ApplyKeyOptions("KEY", Options{TransformCRToLF: new(true)})
 		run(t, nil, cfg, testCase{
 			name:   "key-specific CR normalization",
 			dotenv: "KEY=\"a\rb\"\nOTHER=\"c\rd\"",
@@ -670,9 +668,9 @@ func TestParseConfigTransformCRToLF(t *testing.T) {
 	})
 
 	t.Run("key-specific false overrides global true", func(t *testing.T) {
-		cfg := new(ParseConfig)
-		cfg.ApplyGlobalOptions(&ParseOptions{TransformCRToLF: new(true)})
-		cfg.ApplyKeyOptions("KEY", &ParseOptions{TransformCRToLF: new(false)})
+		cfg := new(Config)
+		cfg.ApplyGlobalOptions(Options{TransformCRToLF: new(true)})
+		cfg.ApplyKeyOptions("KEY", Options{TransformCRToLF: new(false)})
 		run(t, nil, cfg, testCase{
 			name:   "disable CR normalization for one key",
 			dotenv: "KEY=\"a\rb\"\nOTHER=\"c\rd\"",
@@ -681,9 +679,9 @@ func TestParseConfigTransformCRToLF(t *testing.T) {
 	})
 }
 
-func TestParseConfigAppliesTransformsAfterUnescaping(t *testing.T) {
-	cfg := new(ParseConfig)
-	cfg.ApplyGlobalOptions(&ParseOptions{
+func TestConfigAppliesTransformsAfterUnescaping(t *testing.T) {
+	cfg := new(Config)
+	cfg.ApplyGlobalOptions(Options{
 		UnescapeBackslashR: new(true),
 		UnescapeBackslashN: new(true),
 		TransformCRLFToLF:  new(true),
@@ -697,9 +695,9 @@ func TestParseConfigAppliesTransformsAfterUnescaping(t *testing.T) {
 	})
 }
 
-func TestParseConfigTransformCRWithoutCRLFTransformProducesTwoLFBytes(t *testing.T) {
-	cfg := new(ParseConfig)
-	cfg.ApplyGlobalOptions(&ParseOptions{TransformCRToLF: new(true)})
+func TestConfigTransformCRWithoutCRLFTransformProducesTwoLFBytes(t *testing.T) {
+	cfg := new(Config)
+	cfg.ApplyGlobalOptions(Options{TransformCRToLF: new(true)})
 
 	run(t, nil, cfg, testCase{
 		name:   "CRLF becomes two LF bytes when only CR normalization is enabled",

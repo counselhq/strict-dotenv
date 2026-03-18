@@ -52,19 +52,19 @@ func (e EnvStore) Merge(store EnvStore, overwrite bool) {
 
 // SetFromOptionalDotEnv parses a dotenv file into the store using cfg.
 // If the file does not exist, it returns nil without mutating the store.
-// A nil cfg is treated as an all-zero ParseConfig.
-func (e EnvStore) SetFromOptionalDotEnv(path string, cfg *ParseConfig) error {
+// A nil cfg is treated as an all-zero Config.
+func (e EnvStore) SetFromOptionalDotEnv(path string, cfg *Config) error {
 	return e.setFromDotEnv(path, cfg, true)
 }
 
 // SetFromRequiredDotEnv parses a dotenv file into the store using cfg.
 // If the file does not exist, it returns ErrMissingDotEnv.
-// A nil cfg is treated as an all-zero ParseConfig.
-func (e EnvStore) SetFromRequiredDotEnv(path string, cfg *ParseConfig) error {
+// A nil cfg is treated as an all-zero Config.
+func (e EnvStore) SetFromRequiredDotEnv(path string, cfg *Config) error {
 	return e.setFromDotEnv(path, cfg, false)
 }
 
-func (e EnvStore) setFromDotEnv(path string, cfg *ParseConfig, optional bool) error {
+func (e EnvStore) setFromDotEnv(path string, cfg *Config, optional bool) error {
 	err := parseDotEnv(path, e, cfg)
 	if err == nil {
 		return nil
@@ -81,14 +81,14 @@ func (e EnvStore) setFromDotEnv(path string, cfg *ParseConfig, optional bool) er
 }
 
 // SetFromString parses dotenv contents from a string into the store using cfg.
-// A nil cfg is treated as an all-zero ParseConfig.
-func (e EnvStore) SetFromString(s, name string, cfg *ParseConfig) error {
+// A nil cfg is treated as an all-zero Config.
+func (e EnvStore) SetFromString(s, name string, cfg *Config) error {
 	return parseString(s, name, e, cfg)
 }
 
 // SetFromReader parses dotenv contents from an io.Reader into the store using cfg.
-// A nil cfg is treated as an all-zero ParseConfig.
-func (e EnvStore) SetFromReader(r io.Reader, name string, cfg *ParseConfig) error {
+// A nil cfg is treated as an all-zero Config.
+func (e EnvStore) SetFromReader(r io.Reader, name string, cfg *Config) error {
 	return parseReader(r, name, e, cfg)
 }
 
@@ -163,14 +163,14 @@ func (e EnvStore) FilterKeys(allowlist, denylist map[string]struct{}) {
 // existing store value in place. The stored value is treated as the raw bytes
 // that would have appeared between double quotes in a dotenv file. If the key
 // is missing, ErrMissingRequiredKey is returned. A nil cfg is treated as an
-// all-zero ParseConfig. Overwrite is ignored.
-func (e EnvStore) ProcessValue(key string, cfg *ParseConfig) error {
+// all-zero Config. Overwrite is ignored.
+func (e EnvStore) ProcessValue(key string, cfg *Config) error {
 	value, err := e.GetRequired(key)
 	if err != nil {
 		return err
 	}
 
-	processed, err := processValue([]byte(value), resolveParseOptions(cfg, key))
+	processed, err := processValue([]byte(value), resolveOptions(key, cfg))
 	if err != nil {
 		return fmt.Errorf("%s: %w", key, err)
 	}
@@ -180,17 +180,17 @@ func (e EnvStore) ProcessValue(key string, cfg *ParseConfig) error {
 }
 
 // ProcessValues applies the double-quoted value transform pipeline to every
-// value in the store. The ParseConfig is resolved the same way the parser uses
+// value in the store. The Config is resolved the same way the parser uses
 // it: base settings apply to every key unless that key has explicit overrides.
-// A nil cfg is treated as an all-zero ParseConfig. Overwrite is ignored. If any
+// A nil cfg is treated as an all-zero Config. Overwrite is ignored. If any
 // key fails to process, the store is left unchanged.
-func (e EnvStore) ProcessValues(cfg *ParseConfig) error {
+func (e EnvStore) ProcessValues(cfg *Config) error {
 	keys := make([]string, len(e))
 	values := make([]string, len(e))
 
 	i := 0
 	for key, raw := range e {
-		value, err := processValue([]byte(raw), resolveParseOptions(cfg, key))
+		value, err := processValue([]byte(raw), resolveOptions(key, cfg))
 		if err != nil {
 			return fmt.Errorf("%s: %w", key, err)
 		}

@@ -604,12 +604,12 @@ func lexRightSingleQuote(l *lexer) stateFn {
 // Double-quoted values support:
 //   - ESCAPE SEQUENCES: when l.unescapeDoubleQuote is true, the lexer consumes
 //     the character immediately after a '\' so that '\"' does not end the string.
-//     The parser applies ParseOptions during value processing to unescape them.
+//     The parser applies Options during value processing to unescape them.
 //     When l.unescapeDoubleQuote is false (the default), '\' is treated as a
 //     literal character and any '"' closes the value immediately.
 //   - MULTI-LINE content: actual newlines inside the quotes are part of the value.
 //   - Optionally, CRLF and CR line endings within the value are transformed by
-//     the parser after unescaping, according to ParseOptions.
+//     the parser after unescaping, according to Options.
 //
 // The scan consumes characters until it finds the closing '"'. Whether a '"'
 // preceded by '\' terminates the string depends on l.unescapeDoubleQuote.
@@ -857,7 +857,7 @@ func isKeyOrExportChar(r rune) bool {
 //
 // A lone trailing backslash (no following byte) is treated as a literal '\' when
 // UnescapeBackslashBackslash is false, and is an error otherwise.
-func processValue(b []byte, opts resolvedParseOptions) (string, error) {
+func processValue(b []byte, opts resolvedOptions) (string, error) {
 	var buf strings.Builder
 	buf.Grow(len(b))
 

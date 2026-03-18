@@ -53,7 +53,7 @@ import (
 
 func main() {
 	store := strictdotenv.NewEnvStore()
-	cfg := new(strictdotenv.ParseConfig)
+	cfg := new(strictdotenv.Config)
 
 	if err := store.SetFromRequiredDotEnv(".env", cfg); err != nil {
 		log.Fatal(err)
@@ -68,7 +68,7 @@ func main() {
 }
 ```
 
-The parse entry points take a `*ParseConfig`. `cfg := new(strictdotenv.ParseConfig)` and `nil` both start from the same all-zero behavior. If your dotenv file is optional, use `SetFromOptionalDotEnv`; if startup should fail when it is absent, use `SetFromRequiredDotEnv`.
+The parse entry points take a `*Config`. `cfg := new(strictdotenv.Config)` and `nil` both start from the same all-zero behavior. If your dotenv file is optional, use `SetFromOptionalDotEnv`; if startup should fail when it is absent, use `SetFromRequiredDotEnv`.
 
 ## Store Parse Methods
 
@@ -83,24 +83,28 @@ All parse methods write into the receiver `EnvStore`. Parse failures return an e
 
 ## Parse Configuration
 
-Use a `ParseConfig` when you want explicit control over global settings or per-key overrides:
+Use a `Config` when you want explicit control over global settings or per-key overrides:
 
-- `cfg := new(strictdotenv.ParseConfig)` starts with every option disabled
+- `cfg := new(strictdotenv.Config)` starts with every option disabled
 - `cfg.ApplyGlobalOptions(...)` updates the global settings used for every key
 - `cfg.ApplyKeyOptions(...)` updates the settings for one exact key name
 
-`ParseOptions` is pointer-based. Nil fields mean "leave this setting alone." Key-specific options inherit from the global settings, so a key override only needs to mention the fields it wants to change.
+`Options` is passed by value, but its fields are pointers. Nil fields mean
+"leave this setting alone." Key-specific options inherit from the global
+settings, so a key override only needs to mention the fields it wants to
+change. When a key is parsed or reprocessed, those pointer-based settings are
+resolved into a concrete internal option set for that key.
 
 ```go
-cfg := new(strictdotenv.ParseConfig)
-cfg.ApplyGlobalOptions(&strictdotenv.ParseOptions{
-		Overwrite:          new(true),
-		UnescapeBackslashN: new(true),
+cfg := new(strictdotenv.Config)
+cfg.ApplyGlobalOptions(strictdotenv.Options{
+	Overwrite:          new(true),
+	UnescapeBackslashN: new(true),
 })
-cfg.ApplyKeyOptions("PRIVATE_KEY", &strictdotenv.ParseOptions{
-		UnescapeBackslashN: new(false),
-		TransformCRLFToLF:  new(false),
-		TransformCRToLF:    new(false),
+cfg.ApplyKeyOptions("PRIVATE_KEY", strictdotenv.Options{
+	UnescapeBackslashN: new(false),
+	TransformCRLFToLF:  new(false),
+	TransformCRToLF:    new(false),
 })
 ```
 
@@ -114,7 +118,7 @@ Because every option starts as `false`, you only opt into the behavior you want.
 
 ## Parse Options Reference
 
-All options are fields on `ParseOptions`.
+All options are fields on `Options`.
 
 `Overwrite` applies to all kinds of key-value pairs. All other options apply only to double-quoted values.
 
@@ -167,17 +171,17 @@ A few important points:
 
 `ProcessValue` and `ProcessValues` let you apply the same double-quoted unescape and newline-normalization logic to values that are already in an `EnvStore`.
 
-- `ProcessValue(key, cfg)` treats one stored value as if it were the raw contents between double quotes in a dotenv file and resolves that key against the supplied `ParseConfig`.
-- `ProcessValues(cfg)` does the same for every key, using `ParseConfig` base settings and key-specific overrides exactly the way the parser resolves them.
+- `ProcessValue(key, cfg)` treats one stored value as if it were the raw contents between double quotes in a dotenv file and resolves that key against the supplied `Config`.
+- `ProcessValues(cfg)` does the same for every key, using `Config` base settings and key-specific overrides exactly the way the parser resolves them.
 
-`Overwrite` is ignored. It is still part of `ParseConfig` so you can reuse the same config you already use while parsing dotenv files:
+`Overwrite` is ignored. It is still part of `Config` so you can reuse the same config you already use while parsing dotenv files:
 
 ```go
-cfg := new(strictdotenv.ParseConfig)
-cfg.ApplyGlobalOptions(&strictdotenv.ParseOptions{
+cfg := new(strictdotenv.Config)
+cfg.ApplyGlobalOptions(strictdotenv.Options{
 	UnescapeBackslashN: new(false),
 })
-cfg.ApplyKeyOptions("PRIVATE_KEY", &strictdotenv.ParseOptions{
+cfg.ApplyKeyOptions("PRIVATE_KEY", strictdotenv.Options{
 	UnescapeBackslashN: new(true),
 })
 
@@ -192,8 +196,8 @@ if err := store.ProcessValue("PRIVATE_KEY", cfg); err != nil {
 store := strictdotenv.NewEnvStore()
 store.SetFromOsEnviron(nil, nil, false)
 
-cfg := new(strictdotenv.ParseConfig)
-cfg.ApplyKeyOptions("PRIVATE_KEY", &strictdotenv.ParseOptions{
+cfg := new(strictdotenv.Config)
+cfg.ApplyKeyOptions("PRIVATE_KEY", strictdotenv.Options{
 	UnescapeBackslashN: new(true),
 })
 
@@ -217,8 +221,8 @@ import (
 
 func main() {
 	store := strictdotenv.NewEnvStore()
-	cfg := new(strictdotenv.ParseConfig)
-	cfg.ApplyGlobalOptions(&strictdotenv.ParseOptions{Overwrite: new(true)})
+	cfg := new(strictdotenv.Config)
+	cfg.ApplyGlobalOptions(strictdotenv.Options{Overwrite: new(true)})
 
 	store.SetFromOsEnviron(nil, nil, false)
 
@@ -255,7 +259,7 @@ import (
 
 func main() {
 	store := strictdotenv.NewEnvStore()
-	cfg := new(strictdotenv.ParseConfig)
+	cfg := new(strictdotenv.Config)
 
 	if err := store.SetFromRequiredDotEnv(".env", cfg); err != nil {
 		log.Fatal(err)
@@ -338,11 +342,11 @@ The rules below describe the parser's current behavior. They are intentionally s
 
 - The value consists of all characters between the opening (left) and closing (right) double quote
 - Newlines are permitted inside double-quoted values (multi-line values); parsing continues until the closing quote
-- ParseOptions are applied in this order: unescaping, then `TransformCRLFToLF`, then `TransformCRToLF`
+- Options are applied in this order: unescaping, then `TransformCRLFToLF`, then `TransformCRToLF`
 - When a recognized `Unescape*` option is enabled, that backslash escape sequence is unescaped; otherwise it is preserved literally
 - `UnescapeBackslashDoubleQuote` is special because it affects how the parser determines where the value ends, not merely how the contents are post-processed. When enabled, `\"` is an escape sequence: the `"` is consumed as part of the escape and does **not** close the value; the pair is unescaped to `"` after extraction. When disabled (the default), `\` before `"` is a literal backslash character and the `"` closes the value normally — so `KEY="value\"` produces the value `value\`, while `KEY="val\"extra"` is a parse error because `extra"` appears after what the parser treats as the closing `"`
 - `TransformCRLFToLF` and `TransformCRToLF` are both disabled unless you enable them
-- Escape sequences without a corresponding ParseOptions switch (for example `\$`, `\x41`, `\u0041`, `\0`) are preserved as literals and not unescaped; for example, `\x41` is treated as the literal characters `\`, `x`, `4`, and `1`, not the single character `A`
+- Escape sequences without a corresponding Options switch (for example `\$`, `\x41`, `\u0041`, `\0`) are preserved as literals and not unescaped; for example, `\x41` is treated as the literal characters `\`, `x`, `4`, and `1`, not the single character `A`
 - Only whitespace characters, a newline, a comment, or `EOF` may follow the closing double quote; anything else (including another double quote) is an error
 
 ## Comments
