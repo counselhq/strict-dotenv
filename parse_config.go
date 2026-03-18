@@ -1,7 +1,14 @@
 package strictdotenv
 
 // ---------------------------------------------------------------------------
-// ParseConfig
+// Types
+//
+// Public:
+// 	- ParseConfig
+// 	- ParseOptions
+//
+// Internal:
+// 	- resolvedParseOptions
 // ---------------------------------------------------------------------------
 
 // ParseConfig stores partial parse options plus their resolved concrete values.
@@ -24,10 +31,6 @@ type ParseConfig struct {
 	resolvedGlobalOptions resolvedParseOptions
 	resolvedKeyOptions    map[string]resolvedParseOptions
 }
-
-// ---------------------------------------------------------------------------
-// ParseOptions
-// ---------------------------------------------------------------------------
 
 // ParseOptions is the partial, pointer-based form used to set only the fields
 // you want to enable or disable. Nil fields leave the existing value unchanged
@@ -65,6 +68,55 @@ type resolvedParseOptions struct {
 	TransformCRLFToLF            bool
 	TransformCRToLF              bool
 }
+
+// ---------------------------------------------------------------------------
+// Public API for building a ParseConfig:
+// 	- ApplyGlobalOptions
+// 	- ApplyKeyOptions
+// ---------------------------------------------------------------------------
+
+// ApplyGlobalOptions merges the supplied overrides into the config's global
+// options and refreshes all resolved global and key-specific options.
+func (c *ParseConfig) ApplyGlobalOptions(overrides *ParseOptions) {
+	c.GlobalOptions = mergeParseOptions(c.GlobalOptions, overrides)
+	c.resolvedGlobalOptions = resolveOptions(&c.GlobalOptions)
+
+	if len(c.KeyOptions) == 0 {
+		c.resolvedKeyOptions = nil
+		return
+	}
+
+	if c.resolvedKeyOptions == nil {
+		c.resolvedKeyOptions = make(map[string]resolvedParseOptions, len(c.KeyOptions))
+	} else {
+		clear(c.resolvedKeyOptions)
+	}
+
+	for key, keyOptions := range c.KeyOptions {
+		c.resolvedKeyOptions[key] = applyResolvedOptions(c.resolvedGlobalOptions, &keyOptions)
+	}
+}
+
+// ApplyKeyOptions merges the supplied overrides into the exact-key options and
+// refreshes the resolved options for that key only.
+func (c *ParseConfig) ApplyKeyOptions(key string, overrides *ParseOptions) {
+	if c.KeyOptions == nil {
+		c.KeyOptions = make(map[string]ParseOptions)
+	}
+
+	c.KeyOptions[key] = mergeParseOptions(c.KeyOptions[key], overrides)
+	c.resolvedGlobalOptions = resolveOptions(&c.GlobalOptions)
+
+	if c.resolvedKeyOptions == nil {
+		c.resolvedKeyOptions = make(map[string]resolvedParseOptions, len(c.KeyOptions))
+	}
+	keyOptions := c.KeyOptions[key]
+	c.resolvedKeyOptions[key] = applyResolvedOptions(c.resolvedGlobalOptions, &keyOptions)
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers for building/resolving a ParseConfig
+// ---------------------------------------------------------------------------
 
 func mergeParseOptions(base ParseOptions, overrides *ParseOptions) ParseOptions {
 	if overrides == nil {
@@ -203,45 +255,6 @@ func applyResolvedOptions(base resolvedParseOptions, overrides *ParseOptions) re
 		base.TransformCRToLF = *overrides.TransformCRToLF
 	}
 	return base
-}
-
-// ApplyGlobalOptions merges the supplied overrides into the config's global
-// options and refreshes all resolved global and key-specific options.
-func (c *ParseConfig) ApplyGlobalOptions(overrides *ParseOptions) {
-	c.GlobalOptions = mergeParseOptions(c.GlobalOptions, overrides)
-	c.resolvedGlobalOptions = resolveOptions(&c.GlobalOptions)
-
-	if len(c.KeyOptions) == 0 {
-		c.resolvedKeyOptions = nil
-		return
-	}
-
-	if c.resolvedKeyOptions == nil {
-		c.resolvedKeyOptions = make(map[string]resolvedParseOptions, len(c.KeyOptions))
-	} else {
-		clear(c.resolvedKeyOptions)
-	}
-
-	for key, keyOptions := range c.KeyOptions {
-		c.resolvedKeyOptions[key] = applyResolvedOptions(c.resolvedGlobalOptions, &keyOptions)
-	}
-}
-
-// ApplyKeyOptions merges the supplied overrides into the exact-key options and
-// refreshes the resolved options for that key only.
-func (c *ParseConfig) ApplyKeyOptions(key string, overrides *ParseOptions) {
-	if c.KeyOptions == nil {
-		c.KeyOptions = make(map[string]ParseOptions)
-	}
-
-	c.KeyOptions[key] = mergeParseOptions(c.KeyOptions[key], overrides)
-	c.resolvedGlobalOptions = resolveOptions(&c.GlobalOptions)
-
-	if c.resolvedKeyOptions == nil {
-		c.resolvedKeyOptions = make(map[string]resolvedParseOptions, len(c.KeyOptions))
-	}
-	keyOptions := c.KeyOptions[key]
-	c.resolvedKeyOptions[key] = applyResolvedOptions(c.resolvedGlobalOptions, &keyOptions)
 }
 
 func resolveParseOptions(cfg *ParseConfig, key string) resolvedParseOptions {
