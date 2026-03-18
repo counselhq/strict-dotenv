@@ -19,7 +19,6 @@ jobs:
           - macos-latest
           - windows-latest
         go-version:
-          - "1.25"
           - "1.26"
 
     steps:

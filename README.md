@@ -18,13 +18,13 @@
 - helpful error messages with source name and line number
 - minimization of unexpected/undocumented behavior
 
-By default, the library is opinionated in a small number of places:
+`strict-dotenv` does not apply any parse defaults beyond the zero values of its configuration types.
 
-- repeated keys keep the first value
-- in double-quoted values, `\\`, `\"`, `\n`, `\r`, and `\t` are unescaped
-- in double-quoted values, `CRLF` and `CR` are normalized to `LF`
+- repeated keys keep the first value because `Overwrite` starts as `false`
+- double-quoted values preserve recognized escape sequences literally until you enable the corresponding `Unescape*` option
+- `CRLF` and `CR` inside double-quoted values are preserved until you enable `TransformCRLFToLF` and/or `TransformCRToLF`
 
-Those defaults can be changed globally and, when needed, per key.
+Everything is off by default, and every parse behavior change is opt-in.
 
 ## Background
 
@@ -53,7 +53,7 @@ import (
 
 func main() {
 	store := strictdotenv.NewEnvStore()
-	cfg := strictdotenv.NewParseConfig().WithRecommendedDefaults()
+	cfg := new(strictdotenv.Config)
 
 	if err := store.SetFromRequiredDotEnv(".env", cfg); err != nil {
 		log.Fatal(err)
@@ -68,57 +68,48 @@ func main() {
 }
 ```
 
-The parse entry points take a `*ParseConfig`. Use `cfg := strictdotenv.NewParseConfig().WithRecommendedDefaults()` for the library defaults. Passing `nil` means an all-zero config; nothing falls back to the library defaults automatically. If your dotenv file is optional, use `SetFromOptionalDotEnv`; if startup should fail when it is absent, use `SetFromRequiredDotEnv`.
+The parse entry points take a `*Config`. `cfg := new(strictdotenv.Config)` and `nil` both start from the same all-zero behavior. If your dotenv file is optional, use `SetFromOptionalDotEnv`; if startup should fail when it is absent, use `SetFromRequiredDotEnv`.
 
 ## Store Parse Methods
 
 All parse methods write into the receiver `EnvStore`. Parse failures return an error, and the file-based methods differ on missing-file handling as documented below.
 
-| Method                              | Use when                                       | Notes                                                                       |
-| ----------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
-| `store.SetFromOptionalDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe, but it is optional | Missing files are ignored; `path` is used in parser error messages; `nil` cfg means all-zero options |
-| `store.SetFromRequiredDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe and it must exist | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages; `nil` cfg means all-zero options |
-| `store.SetFromString(s, name, cfg)`      | You already have the dotenv contents in memory                   | `name` is used to identify source in error messages (default `"string"`); `nil` cfg means all-zero options |
-| `store.SetFromReader(r, name, cfg)`      | You want to parse from an `io.Reader`                            | `name` is used to identify source in error messages (default `"io.Reader"`); `nil` cfg means all-zero options |
+| Method                                   | Use when                                                         | Notes                                                                                                              |
+| ---------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `store.SetFromOptionalDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe, but it is optional | Missing files are ignored; `path` is used in parser error messages; `nil` cfg means all-zero options               |
+| `store.SetFromRequiredDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe and it must exist   | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages; `nil` cfg means all-zero options |
+| `store.SetFromString(s, name, cfg)`      | You already have the dotenv contents in memory                   | `name` is used to identify source in error messages (default `"string"`); `nil` cfg means all-zero options         |
+| `store.SetFromReader(r, name, cfg)`      | You want to parse from an `io.Reader`                            | `name` is used to identify source in error messages (default `"io.Reader"`); `nil` cfg means all-zero options      |
 
 ## Parse Configuration
 
-Use a `ParseConfig` when you want explicit control over the base settings or per-key overrides:
+Use a `Config` when you want explicit control over global settings or per-key overrides:
 
-- `NewParseConfig()` returns an empty config without applying defaults.
-- `WithRecommendedDefaults()` copies the library's current recommended defaults into the base config.
-- `WithBaseOptions(...)` applies partial overrides to the current base config.
-- `WithKeyOptions(...)` applies overrides for an exact key name.
+- `cfg := new(strictdotenv.Config)` starts with every option disabled
+- `cfg.MergeGlobalOptions(...)` merges fields into the global settings used for every key
+- `cfg.SetGlobalOptions(...)` replaces the global settings used for every key
+- `cfg.MergeKeyOptions(...)` merges fields into the settings for one exact key name
+- `cfg.SetKeyOptions(...)` replaces the settings for one exact key name
 
-### Starting points
-
-| Starting point             | API                                                     | Meaning                                                     |
-| -------------------------- | ------------------------------------------------------- | ----------------------------------------------------------- |
-| Recommended defaults       | `strictdotenv.NewParseConfig().WithRecommendedDefaults()` | Use the library defaults explicitly                         |
-| Explicit zero-value config | `strictdotenv.NewParseConfig()`                         | Every option starts at `false` until you opt in to behavior |
-| Implicit zero-value config | `nil`                                                   | Equivalent to a zero-value `ParseConfig`                    |
-
-### Base vs key-specific settings
-
-| Scope                 | API                                                                | Use for                                                            |
-| --------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| Base settings         | `cfg.WithBaseOptions(&strictdotenv.CustomParseOptions{...})`       | Changing the current base config                                   |
-| Key-specific settings | `cfg.WithKeyOptions("KEY", &strictdotenv.CustomParseOptions{...})` | Making one key behave differently while inheriting the base config |
-
-Unset fields inherit. That means a key-specific override only needs to mention the fields it wants to change.
+`Options` is passed by value, but its fields are pointers. Nil fields mean
+"leave this setting alone" when you call a `Merge*Options` method. With
+`Set*Options`, nil fields mean "leave this field unset in the stored config."
+Key-specific options inherit from the global settings, so a key override only
+needs to mention the fields it wants to change. When a key is parsed or
+reprocessed, those pointer-based settings are resolved into a concrete internal
+option set for that key.
 
 ```go
-cfg := strictdotenv.NewParseConfig().
-	WithRecommendedDefaults().
-	WithBaseOptions(&strictdotenv.CustomParseOptions{
-		Overwrite:          strictdotenv.BoolPtr(true),
-		UnescapeBackslashN: strictdotenv.BoolPtr(true),
-	}).
-	WithKeyOptions("PRIVATE_KEY", &strictdotenv.CustomParseOptions{
-		UnescapeBackslashN: strictdotenv.BoolPtr(false),
-		TransformCRLFToLF:  strictdotenv.BoolPtr(false),
-		TransformCRToLF:    strictdotenv.BoolPtr(false),
-	})
+cfg := new(strictdotenv.Config)
+cfg.MergeGlobalOptions(strictdotenv.Options{
+	Overwrite:          new(true),
+	UnescapeBackslashN: new(true),
+})
+cfg.MergeKeyOptions("PRIVATE_KEY", strictdotenv.Options{
+	UnescapeBackslashN: new(false),
+	TransformCRLFToLF:  new(false),
+	TransformCRToLF:    new(false),
+})
 ```
 
 In that example:
@@ -127,29 +118,33 @@ In that example:
 - most double-quoted values unescape `\n`
 - `PRIVATE_KEY` preserves `\n`, `CRLF`, and `CR` literally while still inheriting the base `Overwrite` setting
 
-If you want to build a config from all-zero settings instead, skip `WithRecommendedDefaults()` and call `WithBaseOptions(...)` directly.
+Because every option starts as `false`, you only opt into the behavior you want.
+
+Use the `Merge*Options` methods when you want incremental, non-destructive
+updates. Use the `Set*Options` methods when you want to replace the stored
+global or per-key option set and clear any fields you do not include.
 
 ## Parse Options Reference
 
-All options are fields on `CustomParseOptions`. The `BoolPtr` helper exists to make those fields easy to populate.
+All options are fields on `Options`.
 
 `Overwrite` applies to all kinds of key-value pairs. All other options apply only to double-quoted values.
 
 | Field                          | Default | Applies to           | Meaning                                                                           |
 | ------------------------------ | ------- | -------------------- | --------------------------------------------------------------------------------- |
 | `Overwrite`                    | `false` | all key-value pairs  | When `true`, later values replace earlier ones for the same key                   |
-| `UnescapeBackslashBackslash`   | `true`  | double-quoted values | `\\` becomes `\`                                                                  |
-| `UnescapeBackslashDoubleQuote` | `true`  | double-quoted values | `\"` becomes `"`                                                                  |
+| `UnescapeBackslashBackslash`   | `false` | double-quoted values | `\\` becomes `\`                                                                  |
+| `UnescapeBackslashDoubleQuote` | `false` | double-quoted values | `\"` becomes `"`                                                                  |
 | `UnescapeBackslashSingleQuote` | `false` | double-quoted values | `\'` becomes `'`                                                                  |
 | `UnescapeBackslashA`           | `false` | double-quoted values | `\a` becomes the alert/bell character                                             |
 | `UnescapeBackslashB`           | `false` | double-quoted values | `\b` becomes the backspace character                                              |
 | `UnescapeBackslashF`           | `false` | double-quoted values | `\f` becomes the form feed character                                              |
-| `UnescapeBackslashN`           | `true`  | double-quoted values | `\n` becomes line feed                                                            |
-| `UnescapeBackslashR`           | `true`  | double-quoted values | `\r` becomes carriage return before newline transforms are applied                |
-| `UnescapeBackslashT`           | `true`  | double-quoted values | `\t` becomes tab                                                                  |
+| `UnescapeBackslashN`           | `false` | double-quoted values | `\n` becomes line feed                                                            |
+| `UnescapeBackslashR`           | `false` | double-quoted values | `\r` becomes carriage return before newline transforms are applied                |
+| `UnescapeBackslashT`           | `false` | double-quoted values | `\t` becomes tab                                                                  |
 | `UnescapeBackslashV`           | `false` | double-quoted values | `\v` becomes vertical tab                                                         |
-| `TransformCRLFToLF`            | `true`  | double-quoted values | Literal or unescaped `CRLF` is normalized to `LF` before standalone `CR` handling |
-| `TransformCRToLF`              | `true`  | double-quoted values | Remaining literal or unescaped `CR` is normalized to `LF`                         |
+| `TransformCRLFToLF`            | `false` | double-quoted values | Literal or unescaped `CRLF` is normalized to `LF` before standalone `CR` handling |
+| `TransformCRToLF`              | `false` | double-quoted values | Remaining literal or unescaped `CR` is normalized to `LF`                         |
 
 A few important points:
 
@@ -163,41 +158,40 @@ A few important points:
 
 ### Common store methods
 
-| Method                                             | Purpose                                                                 | Notes                                                                                     |
-| -------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `NewEnvStore()`                                    | Create an empty store                                                   | Returns a writable `map[string]string`                                                    |
-| `Get(key)`                                         | Read a value with map-style presence reporting                          | Returns `(value, ok)` so empty strings can be distinguished from missing keys             |
-| `GetRequired(key)`                                      | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                                   |
-| `Set(key, value, overwrite)`                            | Write one value                                                         | `overwrite=false` keeps an existing value                                                     |
-| `Merge(other, overwrite)`                               | Merge another `EnvStore` into this one                                  | Same overwrite semantics as `Set`                                                              |
-| `ProcessValue(key, cfg)`                                | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
-| `ProcessValues(cfg)`                                    | Reprocess every stored value using parser-style config resolution       | Applies base plus per-key options; leaves the store unchanged on error                        |
-| `SetFromOptionalDotEnv(path, cfg)`                      | Parse an optional dotenv file into the store                            | Missing files are ignored; `path` is used in parser error messages                            |
-| `SetFromRequiredDotEnv(path, cfg)`                      | Parse a required dotenv file into the store                             | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages             |
-| `SetFromString(s, name, cfg)`                           | Parse dotenv contents from a string into the store                      | If `name` is empty, errors use `"string"` as source name                                      |
-| `SetFromReader(r, name, cfg)`                           | Parse dotenv contents from an `io.Reader` into the store                | If `name` is empty, errors use `"io.Reader"` as source name                                   |
-| `SetFromOsEnviron(allowlist, denylist, overwrite)`      | Import from the current process environment                             | `allowlist` and `denylist` are `map[string]struct{}`                                          |
-| `LoadIntoOsEnviron(allowlist, denylist, overwrite)`     | Export store values into the current process environment                | Existing OS values are preserved unless `overwrite` is `true`                                 |
-| `FilterKeys(allowlist, denylist)`                       | Remove keys that fail the combined filters                              | `nil` allowlist keeps all; `nil` denylist removes none; denylist wins on overlap              |
+| Method                                              | Purpose                                                                 | Notes                                                                                             |
+| --------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `NewEnvStore()`                                     | Create an empty store                                                   | Returns a writable `map[string]string`                                                            |
+| `Get(key)`                                          | Read a value with map-style presence reporting                          | Returns `(value, ok)` so empty strings can be distinguished from missing keys                     |
+| `GetRequired(key)`                                  | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                                       |
+| `Set(key, value, overwrite)`                        | Write one value                                                         | `overwrite=false` keeps an existing value                                                         |
+| `Merge(other, overwrite)`                           | Merge another `EnvStore` into this one                                  | Same overwrite semantics as `Set`                                                                 |
+| `ProcessValue(key, cfg)`                            | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
+| `ProcessValues(cfg)`                                | Reprocess every stored value using parser-style config resolution       | Applies base plus per-key options; leaves the store unchanged on error                            |
+| `SetFromOptionalDotEnv(path, cfg)`                  | Parse an optional dotenv file into the store                            | Missing files are ignored; `path` is used in parser error messages                                |
+| `SetFromRequiredDotEnv(path, cfg)`                  | Parse a required dotenv file into the store                             | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages                  |
+| `SetFromString(s, name, cfg)`                       | Parse dotenv contents from a string into the store                      | If `name` is empty, errors use `"string"` as source name                                          |
+| `SetFromReader(r, name, cfg)`                       | Parse dotenv contents from an `io.Reader` into the store                | If `name` is empty, errors use `"io.Reader"` as source name                                       |
+| `SetFromOsEnviron(allowlist, denylist, overwrite)`  | Import from the current process environment                             | `allowlist` and `denylist` are `map[string]struct{}`                                              |
+| `LoadIntoOsEnviron(allowlist, denylist, overwrite)` | Export store values into the current process environment                | Existing OS values are preserved unless `overwrite` is `true`                                     |
+| `FilterKeys(allowlist, denylist)`                   | Remove keys that fail the combined filters                              | `nil` allowlist keeps all; `nil` denylist removes none; denylist wins on overlap                  |
 
 ### Reprocess existing store values
 
 `ProcessValue` and `ProcessValues` let you apply the same double-quoted unescape and newline-normalization logic to values that are already in an `EnvStore`.
 
-- `ProcessValue(key, cfg)` treats one stored value as if it were the raw contents between double quotes in a dotenv file and resolves that key against the supplied `ParseConfig`.
-- `ProcessValues(cfg)` does the same for every key, using `ParseConfig` base settings and key-specific overrides exactly the way the parser resolves them.
+- `ProcessValue(key, cfg)` treats one stored value as if it were the raw contents between double quotes in a dotenv file and resolves that key against the supplied `Config`.
+- `ProcessValues(cfg)` does the same for every key, using `Config` base settings and key-specific overrides exactly the way the parser resolves them.
 
-`Overwrite` is ignored. It is still part of `ParseConfig` so you can reuse the same config you already use while parsing dotenv files:
+`Overwrite` is ignored. It is still part of `Config` so you can reuse the same config you already use while parsing dotenv files:
 
 ```go
-cfg := strictdotenv.NewParseConfig().
-	WithRecommendedDefaults().
-	WithBaseOptions(&strictdotenv.CustomParseOptions{
-		UnescapeBackslashN: strictdotenv.BoolPtr(false),
-	}).
-	WithKeyOptions("PRIVATE_KEY", &strictdotenv.CustomParseOptions{
-		UnescapeBackslashN: strictdotenv.BoolPtr(true),
-	})
+cfg := new(strictdotenv.Config)
+cfg.MergeGlobalOptions(strictdotenv.Options{
+	UnescapeBackslashN: new(false),
+})
+cfg.MergeKeyOptions("PRIVATE_KEY", strictdotenv.Options{
+	UnescapeBackslashN: new(true),
+})
 
 if err := store.ProcessValue("PRIVATE_KEY", cfg); err != nil {
 	// handle error
@@ -210,11 +204,10 @@ if err := store.ProcessValue("PRIVATE_KEY", cfg); err != nil {
 store := strictdotenv.NewEnvStore()
 store.SetFromOsEnviron(nil, nil, false)
 
-cfg := strictdotenv.NewParseConfig().
-	WithRecommendedDefaults().
-	WithKeyOptions("PRIVATE_KEY", &strictdotenv.CustomParseOptions{
-		UnescapeBackslashN: strictdotenv.BoolPtr(true),
-	})
+cfg := new(strictdotenv.Config)
+cfg.MergeKeyOptions("PRIVATE_KEY", strictdotenv.Options{
+	UnescapeBackslashN: new(true),
+})
 
 if err := store.ProcessValues(cfg); err != nil {
 	log.Fatal(err)
@@ -236,7 +229,8 @@ import (
 
 func main() {
 	store := strictdotenv.NewEnvStore()
-	cfg := strictdotenv.NewParseConfig().WithRecommendedDefaults()
+	cfg := new(strictdotenv.Config)
+	cfg.MergeGlobalOptions(strictdotenv.Options{Overwrite: new(true)})
 
 	store.SetFromOsEnviron(nil, nil, false)
 
@@ -273,7 +267,7 @@ import (
 
 func main() {
 	store := strictdotenv.NewEnvStore()
-	cfg := strictdotenv.NewParseConfig().WithRecommendedDefaults()
+	cfg := new(strictdotenv.Config)
 
 	if err := store.SetFromRequiredDotEnv(".env", cfg); err != nil {
 		log.Fatal(err)
@@ -356,10 +350,11 @@ The rules below describe the parser's current behavior. They are intentionally s
 
 - The value consists of all characters between the opening (left) and closing (right) double quote
 - Newlines are permitted inside double-quoted values (multi-line values); parsing continues until the closing quote
-- ParseOptions are applied in this order: unescaping, then `TransformCRLFToLF`, then `TransformCRToLF`
-- By default, `\"`, `\\`, `\n`, `\r`, and `\t` are unescaped; unescaping `\'`, `\a`, `\b`, `\f`, and `\v` can be enabled via ParseOptions. When a recognized `Unescape*` option is disabled, that backslash escape sequence is preserved literally.
-- By default, both `TransformCRLFToLF` and `TransformCRToLF` are enabled, so each `CRLF` and `CR` is normalized to `LF` after unescaping
-- Escape sequences without a corresponding ParseOptions switch (for example `\$`, `\x41`, `\u0041`, `\0`) are preserved as literals and not unescaped; for example, `\x41` is treated as the literal characters `\`, `x`, `4`, and `1`, not the single character `A`
+- Options are applied in this order: unescaping, then `TransformCRLFToLF`, then `TransformCRToLF`
+- When a recognized `Unescape*` option is enabled, that backslash escape sequence is unescaped; otherwise it is preserved literally
+- `UnescapeBackslashDoubleQuote` is special because it affects how the parser determines where the value ends, not merely how the contents are post-processed. When enabled, `\"` is an escape sequence: the `"` is consumed as part of the escape and does **not** close the value; the pair is unescaped to `"` after extraction. When disabled (the default), `\` before `"` is a literal backslash character and the `"` closes the value normally — so `KEY="value\"` produces the value `value\`, while `KEY="val\"extra"` is a parse error because `extra"` appears after what the parser treats as the closing `"`
+- `TransformCRLFToLF` and `TransformCRToLF` are both disabled unless you enable them
+- Escape sequences without a corresponding Options switch (for example `\$`, `\x41`, `\u0041`, `\0`) are preserved as literals and not unescaped; for example, `\x41` is treated as the literal characters `\`, `x`, `4`, and `1`, not the single character `A`
 - Only whitespace characters, a newline, a comment, or `EOF` may follow the closing double quote; anything else (including another double quote) is an error
 
 ## Comments
@@ -394,7 +389,7 @@ Examples and non-examples:
 
 ## Repeated Keys
 
-- If `Overwrite` is `false` (the default), a repeated key is silently ignored; the first definition wins
+- If `Overwrite` is `false`, a repeated key is silently ignored; the first definition wins
 - If `Overwrite` is `true`, a repeated key overwrites the previously stored value; the last definition wins
 - `Overwrite` applies to every key-value pair, not just double-quoted values
 
@@ -419,7 +414,7 @@ We are open to considering these features (or others) in the future if there is 
 
 ## Supported Go Versions
 
-We will support the current Go major version and the previous major version. For example, if the current Go version is `1.26`, we will support `1.26` and `1.25`.
+Currently, only 1.26 is supported. Starting with 1.27, we will support the current Go major version and the previous major version.
 
 ## License
 

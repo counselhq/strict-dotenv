@@ -12,12 +12,12 @@ import (
 // Tokens
 // ----------------------------------------------------------------------------
 
-type Pos int
+type pos int
 
 type token struct {
 	typ   tokenType // the category of token (key, comment, etc.)
-	start Pos       // byte offset where the token starts in lexer's bytes
-	end   Pos       // byte offset where the token ends in lexer's bytes
+	start pos       // byte offset where the token starts in lexer's bytes
+	end   pos       // byte offset where the token ends in lexer's bytes
 	line  int       // line number for error reporting
 	err   string    // error message for error reporting
 }
@@ -125,9 +125,9 @@ type lexer struct {
 	name  string // name of the file | named pipe | reader source
 	bytes []byte // raw bytes being scanned
 
-	pos       Pos  // current byte offset in bytes; advances forward as runes are consumed
+	pos       pos  // current byte offset in bytes; advances forward as runes are consumed
 	lastWidth int  // byte width of the rune most recently returned by next(); used by backup()
-	start     Pos  // byte offset where the current (not-yet-emitted) token begins
+	start     pos  // byte offset where the current (not-yet-emitted) token begins
 	atEOF     bool // true after next() returns eof, prevents double-backup past the end
 
 	line      int // current line number (1-based), incremented on each line terminator
@@ -136,6 +136,12 @@ type lexer struct {
 	token    token // the most recently emitted token, read by nextToken()
 	hasToken bool  // true when a token has been emitted and not yet consumed
 	done     bool  // true after EOF | error
+
+	// unescapeDoubleQuote controls whether a backslash before a double quote
+	// prevents the quote from closing the value. When true, '"' is an escape
+	// sequence and the '"' is consumed without ending the string. When false
+	// (the default), '\' is a literal character and '"' closes the value.
+	unescapeDoubleQuote bool
 
 	state stateFn
 }
@@ -197,7 +203,7 @@ func (l *lexer) next() rune {
 
 	r, w := utf8.DecodeRune(l.bytes[l.pos:])
 	l.lastWidth = w
-	l.pos += Pos(w)
+	l.pos += pos(w)
 	return r
 }
 
@@ -222,7 +228,7 @@ func (l *lexer) backup() {
 	if l.lastWidth == 0 {
 		return
 	}
-	l.pos -= Pos(l.lastWidth)
+	l.pos -= pos(l.lastWidth)
 	l.lastWidth = 0
 	if b := l.bytes[l.pos]; b == '\n' || b == '\r' {
 		l.line--
@@ -304,7 +310,7 @@ type stateFn func(*lexer) stateFn
 // If no BOM is present, it immediately delegates to lexLineStart.
 func lexStart(l *lexer) stateFn {
 	if l.pos == 0 && bytes.HasPrefix(l.bytes, bomPrefix) {
-		l.pos += Pos(len(bomPrefix))
+		l.pos += pos(len(bomPrefix))
 		l.emit(tokenBOM)
 		return lexLineStart
 	}
@@ -522,7 +528,7 @@ func lexUnquotedValue(l *lexer) stateFn {
 			break
 		}
 
-		scanPos += Pos(w)
+		scanPos += pos(w)
 		if r == ' ' || r == '\t' {
 			prevWasWhitespace = true
 		} else {
@@ -596,15 +602,17 @@ func lexRightSingleQuote(l *lexer) stateFn {
 
 // lexDoubleQuoteValue scans the content between opening and closing double quotes.
 // Double-quoted values support:
-//   - ESCAPE SEQUENCES: the lexer preserves backslash escapes verbatim and lets
-//     the parser apply ParseOptions during value processing.
+//   - ESCAPE SEQUENCES: when l.unescapeDoubleQuote is true, the lexer consumes
+//     the character immediately after a '\' so that '\"' does not end the string.
+//     The parser applies Options during value processing to unescape them.
+//     When l.unescapeDoubleQuote is false (the default), '\' is treated as a
+//     literal character and any '"' closes the value immediately.
 //   - MULTI-LINE content: actual newlines inside the quotes are part of the value.
 //   - Optionally, CRLF and CR line endings within the value are transformed by
-//     the parser after unescaping, according to ParseOptions.
+//     the parser after unescaping, according to Options.
 //
-// The scan consumes characters until it finds an *unescaped* closing '"'.
-// When a backslash is encountered, the next character is consumed unconditionally
-// (so '\"' does not end the string).
+// The scan consumes characters until it finds the closing '"'. Whether a '"'
+// preceded by '\' terminates the string depends on l.unescapeDoubleQuote.
 //
 // When the closing quote is found, the cursor backs up (to exclude the quote
 // from the value range), and the token is emitted.
@@ -614,9 +622,11 @@ func lexDoubleQuoteValue(l *lexer) stateFn {
 		case eof:
 			return l.errorf("unterminated double-quoted value")
 		case '\\':
-			esc := l.next()
-			if esc == eof {
-				return l.errorf("unterminated double-quoted value")
+			if l.unescapeDoubleQuote {
+				esc := l.next()
+				if esc == eof {
+					return l.errorf("unterminated double-quoted value")
+				}
 			}
 		case '"':
 			l.backup()
@@ -836,7 +846,7 @@ func isKeyOrExportChar(r rune) bool {
 	return uint32(r) < 128 && lettersDigitsAndUnderscore[r]
 }
 
-// processValue applies ParseOptions to the raw byte content between
+// processValue applies resolved parse options to the raw byte content between
 // double quotes while iterating the value once. Recognized backslash sequences
 // are unescaped first, then the resulting stream is normalized as if CRLF and
 // CR transforms were applied in order.
@@ -847,7 +857,7 @@ func isKeyOrExportChar(r rune) bool {
 //
 // A lone trailing backslash (no following byte) is treated as a literal '\' when
 // UnescapeBackslashBackslash is false, and is an error otherwise.
-func processValue(b []byte, opts ParseOptions) (string, error) {
+func processValue(b []byte, opts resolvedOptions) (string, error) {
 	var buf strings.Builder
 	buf.Grow(len(b))
 

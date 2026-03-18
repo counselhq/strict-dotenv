@@ -1,239 +1,279 @@
 package strictdotenv
 
 // ---------------------------------------------------------------------------
-// ParseConfig
+// Types
+//
+// Public:
+//   - Config  - top-level configuration passed to parse functions
+//   - Options - partial option set used to build a config
+//
+// Internal:
+//   - resolvedOptions - concrete bool option set derived from [Options]
 // ---------------------------------------------------------------------------
 
-// ParseConfig selects the default ParseOptions for the parse and optionally
-// replaces them for specific keys. Use NewParseConfig to construct an empty
-// ParseConfig, WithRecommendedDefaults to opt into strict-dotenv's recommended
-// defaults, WithBaseOptions to modify the current base options, and
-// WithKeyOptions to add per-key overrides that inherit from the current base.
-// Overwrite affects every committed key-value pair during parsing; all other
-// ParseOptions affect only double-quoted values. EnvStore.ProcessValue and
-// EnvStore.ProcessValues ignore Overwrite.
+// Config holds global parse options plus exact-key overrides.
+//
+// All options default to false (disabled). Use [Config.MergeGlobalOptions] to
+// incrementally build a baseline that applies to every key, [Config.SetGlobalOptions]
+// to replace that baseline outright, [Config.MergeKeyOptions] to add per-key
+// overrides that layer on top of the global baseline, or [Config.SetKeyOptions]
+// to replace one key's overrides outright.
+//
+// Option scoping for EnvStore.ProcessValue and EnvStore.ProcessValues:
+//   - [Options.Overwrite] is ignored
+//   - All other options apply through the same double-quoted value processing
+//     pipeline the parser uses
+//
+// Option scoping for EnvStore.SetFrom* methods:
+//   - [Options.Overwrite] applies to unquoted, single-quoted, and double-quoted values
+//   - All other options apply only to double-quoted values
+//
+// A nil *Config is valid and equivalent to a zero-value Config (all options
+// disabled).
 //
 // Usage:
 //
-//	cfg := NewParseConfig() // all zero values
-//	cfg := NewParseConfig().
-//		WithRecommendedDefaults().
-//		WithBaseOptions(&CustomParseOptions{Overwrite: BoolPtr(true)})
-//	cfg := NewParseConfig().
-//		WithRecommendedDefaults().
-//		WithKeyOptions("SECRET", &CustomParseOptions{UnescapeBackslashN: BoolPtr(false)})
-type ParseConfig struct {
-	ParseOptions ParseOptions
-	KeyOptions   map[string]ParseOptions
+//	cfg := new(Config)
+//	cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
+//	cfg.MergeKeyOptions("SECRET", Options{UnescapeBackslashN: new(false)})
+type Config struct {
+	globalOptions Options
+	keyOptions    map[string]Options
 }
 
-// ---------------------------------------------------------------------------
-// ParseOptions and CustomParseOptions
-// ---------------------------------------------------------------------------
+// Options is the partial, pointer-field option set passed to
+// [Config.MergeGlobalOptions], [Config.SetGlobalOptions],
+// [Config.MergeKeyOptions], and [Config.SetKeyOptions].
+//
+// Every field is a pointer so that only the fields you explicitly set are
+// stored. With the Merge* methods, nil fields leave the existing value in the
+// config unchanged. With the Set* methods, nil fields leave that option unset
+// in the stored config. This supports both incremental, non-destructive updates
+// and full replacement of an option set.
+//
+// The Unescape* fields control which backslash sequences are expanded into
+// their intended character or control action inside a value. The Transform*
+// fields run after unescaping and normalize line endings in the resulting
+// string.
+type Options struct {
+	// Overwrite controls whether an existing key-value pair in the store is
+	// overwritten when the same key appears again during parsing.
+	Overwrite *bool
 
-// ParseOptions controls duplicate-key handling during parsing and the
-// double-quoted value transform pipeline used by both parsing and EnvStore
-// value-processing helpers.
-type ParseOptions struct {
+	UnescapeBackslashBackslash   *bool // \\ -> \
+	UnescapeBackslashDoubleQuote *bool // \" -> "
+	UnescapeBackslashSingleQuote *bool // \' -> '
+	UnescapeBackslashA           *bool // \a -> alert/bell             (U+0007)
+	UnescapeBackslashB           *bool // \b -> backspace              (U+0008)
+	UnescapeBackslashF           *bool // \f -> form feed              (U+000C)
+	UnescapeBackslashN           *bool // \n -> line feed (LF)         (U+000A)
+	UnescapeBackslashR           *bool // \r -> carriage return (CR)   (U+000D)
+	UnescapeBackslashT           *bool // \t -> horizontal tab         (U+0009)
+	UnescapeBackslashV           *bool // \v -> vertical tab           (U+000B)
+
+	// Transform* fields normalize line endings after unescaping.
+	TransformCRLFToLF *bool // CRLF -> LF (runs first)
+	TransformCRToLF   *bool // CR   -> LF (runs after TransformCRLFToLF)
+}
+
+// resolvedOptions is the concrete, non-pointer form of [Options]
+// used internally during parsing and value processing.
+type resolvedOptions struct {
 	Overwrite                    bool
-	UnescapeBackslashBackslash   bool // \\
-	UnescapeBackslashDoubleQuote bool // \"
-	UnescapeBackslashSingleQuote bool // \'
-	UnescapeBackslashA           bool // \a (alert/bell)
-	UnescapeBackslashB           bool // \b (backspace)
-	UnescapeBackslashF           bool // \f (form feed)
-	UnescapeBackslashN           bool // \n (line feed)
-	UnescapeBackslashR           bool // \r (carriage return)
-	UnescapeBackslashT           bool // \t (tab)
-	UnescapeBackslashV           bool // \v (vertical tab)
-	TransformCRLFToLF            bool // after unescaping
-	TransformCRToLF              bool // after TransformCRLFToLF
+	UnescapeBackslashBackslash   bool
+	UnescapeBackslashDoubleQuote bool
+	UnescapeBackslashSingleQuote bool
+	UnescapeBackslashA           bool
+	UnescapeBackslashB           bool
+	UnescapeBackslashF           bool
+	UnescapeBackslashN           bool
+	UnescapeBackslashR           bool
+	UnescapeBackslashT           bool
+	UnescapeBackslashV           bool
+	TransformCRLFToLF            bool
+	TransformCRToLF              bool
 }
 
-// CustomParseOptions is the partial, pointer-based form used for overriding
-// only selected ParseOptions fields while leaving the rest unchanged.
-type CustomParseOptions struct {
-	Overwrite                    *bool
-	UnescapeBackslashBackslash   *bool
-	UnescapeBackslashDoubleQuote *bool
-	UnescapeBackslashSingleQuote *bool
-	UnescapeBackslashA           *bool
-	UnescapeBackslashB           *bool
-	UnescapeBackslashF           *bool
-	UnescapeBackslashN           *bool
-	UnescapeBackslashR           *bool
-	UnescapeBackslashT           *bool
-	UnescapeBackslashV           *bool
-	TransformCRLFToLF            *bool
-	TransformCRToLF              *bool
+// ---------------------------------------------------------------------------
+// Public API for building a Config:
+//   - MergeGlobalOptions - merge fields into the baseline options for all keys
+//   - SetGlobalOptions - replace the baseline options for all keys
+//   - MergeKeyOptions - merge fields into the overrides for one named key
+//   - SetKeyOptions - replace the overrides for one named key
+// ---------------------------------------------------------------------------
+
+// MergeGlobalOptions merges the provided options into the existing global options.
+// Any unset or nil fields are ignored.
+//
+// Config maintains its own copy of all options, so callers can reuse
+// and modify the same Options without affecting the Config after the call.
+func (c *Config) MergeGlobalOptions(options Options) {
+	c.globalOptions = mergeOptions(c.globalOptions, options)
 }
 
-// defaultParseOptions contains the library's current recommended parse
-// defaults. Use ParseConfig.WithRecommendedDefaults to copy them into a
-// config before applying additional overrides.
-var defaultParseOptions = CustomParseOptions{
-	Overwrite:                    BoolPtr(false),
-	UnescapeBackslashBackslash:   BoolPtr(true),
-	UnescapeBackslashDoubleQuote: BoolPtr(true),
-	UnescapeBackslashSingleQuote: BoolPtr(false),
-	UnescapeBackslashA:           BoolPtr(false),
-	UnescapeBackslashB:           BoolPtr(false),
-	UnescapeBackslashF:           BoolPtr(false),
-	UnescapeBackslashN:           BoolPtr(true),
-	UnescapeBackslashR:           BoolPtr(true),
-	UnescapeBackslashT:           BoolPtr(true),
-	UnescapeBackslashV:           BoolPtr(false),
-	TransformCRLFToLF:            BoolPtr(true),
-	TransformCRToLF:              BoolPtr(true),
+// SetGlobalOptions sets or replaces the existing global options with the provided options.
+// Any field left unset or nil will be left unset in the stored global options.
+//
+// Config maintains its own copy of all options, so callers can reuse
+// and modify the same Options without affecting the Config after the call.
+func (c *Config) SetGlobalOptions(options Options) {
+	c.globalOptions = mergeOptions(Options{}, options)
 }
 
-// BoolPtr is a helper for easily constructing *bool values from bool literals.
-// Remove in favor of new(false) | new(true) when library requires Go 1.26+.
-func BoolPtr(b bool) *bool { return &b }
+// MergeKeyOptions merges the provided options into the per-key options for key.
+// Any unset or nil fields are ignored.
+//
+// Per-key options inherit from the global options: the effective value for a field
+// is the global value unless the per-key setting explicitly overrides it.
+//
+// Config maintains its own copy of all options, so callers can reuse
+// and modify the same Options without affecting the Config after the call.
+func (c *Config) MergeKeyOptions(key string, options Options) {
+	if c.keyOptions == nil {
+		c.keyOptions = make(map[string]Options)
+	}
 
-// resolveCustom converts a fully-populated CustomParseOptions to ParseOptions.
-func resolveCustom(c *CustomParseOptions) ParseOptions {
-	var opts ParseOptions
-	if c.Overwrite != nil {
-		opts.Overwrite = *c.Overwrite
-	}
-	if c.UnescapeBackslashBackslash != nil {
-		opts.UnescapeBackslashBackslash = *c.UnescapeBackslashBackslash
-	}
-	if c.UnescapeBackslashDoubleQuote != nil {
-		opts.UnescapeBackslashDoubleQuote = *c.UnescapeBackslashDoubleQuote
-	}
-	if c.UnescapeBackslashSingleQuote != nil {
-		opts.UnescapeBackslashSingleQuote = *c.UnescapeBackslashSingleQuote
-	}
-	if c.UnescapeBackslashA != nil {
-		opts.UnescapeBackslashA = *c.UnescapeBackslashA
-	}
-	if c.UnescapeBackslashB != nil {
-		opts.UnescapeBackslashB = *c.UnescapeBackslashB
-	}
-	if c.UnescapeBackslashF != nil {
-		opts.UnescapeBackslashF = *c.UnescapeBackslashF
-	}
-	if c.UnescapeBackslashN != nil {
-		opts.UnescapeBackslashN = *c.UnescapeBackslashN
-	}
-	if c.UnescapeBackslashR != nil {
-		opts.UnescapeBackslashR = *c.UnescapeBackslashR
-	}
-	if c.UnescapeBackslashT != nil {
-		opts.UnescapeBackslashT = *c.UnescapeBackslashT
-	}
-	if c.UnescapeBackslashV != nil {
-		opts.UnescapeBackslashV = *c.UnescapeBackslashV
-	}
-	if c.TransformCRLFToLF != nil {
-		opts.TransformCRLFToLF = *c.TransformCRLFToLF
-	}
-	if c.TransformCRToLF != nil {
-		opts.TransformCRToLF = *c.TransformCRToLF
-	}
-	return opts
+	c.keyOptions[key] = mergeOptions(c.keyOptions[key], options)
 }
 
-// applyCustomOverrides returns a copy of base with any non-nil fields from
-// overrides applied. If overrides is nil, base is returned unchanged.
-func applyCustomOverrides(base ParseOptions, overrides *CustomParseOptions) ParseOptions {
-	if overrides == nil {
-		return base
+// SetKeyOptions sets or replaces the per-key options for key.
+// Any field left unset or nil will be left unset in the stored per-key overrides.
+//
+// Per-key options inherit from the global options: the effective value for a field
+// is the global value unless the per-key setting explicitly overrides it.
+//
+// Config maintains its own copy of all options, so callers can reuse
+// and modify the same Options without affecting the Config after the call.
+func (c *Config) SetKeyOptions(key string, options Options) {
+	if c.keyOptions == nil {
+		c.keyOptions = make(map[string]Options)
 	}
+
+	c.keyOptions[key] = mergeOptions(Options{}, options)
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers for building/resolving a Config
+// ---------------------------------------------------------------------------
+
+// mergeOptions safely merges overrides onto the desired base Options.
+// Pointer fields are deep-copied so the stored Options owns its memory.
+func mergeOptions(base, overrides Options) Options {
 	if overrides.Overwrite != nil {
-		base.Overwrite = *overrides.Overwrite
+		base.Overwrite = new(*overrides.Overwrite)
 	}
 	if overrides.UnescapeBackslashBackslash != nil {
-		base.UnescapeBackslashBackslash = *overrides.UnescapeBackslashBackslash
+		base.UnescapeBackslashBackslash = new(*overrides.UnescapeBackslashBackslash)
 	}
 	if overrides.UnescapeBackslashDoubleQuote != nil {
-		base.UnescapeBackslashDoubleQuote = *overrides.UnescapeBackslashDoubleQuote
+		base.UnescapeBackslashDoubleQuote = new(*overrides.UnescapeBackslashDoubleQuote)
 	}
 	if overrides.UnescapeBackslashSingleQuote != nil {
-		base.UnescapeBackslashSingleQuote = *overrides.UnescapeBackslashSingleQuote
+		base.UnescapeBackslashSingleQuote = new(*overrides.UnescapeBackslashSingleQuote)
 	}
 	if overrides.UnescapeBackslashA != nil {
-		base.UnescapeBackslashA = *overrides.UnescapeBackslashA
+		base.UnescapeBackslashA = new(*overrides.UnescapeBackslashA)
 	}
 	if overrides.UnescapeBackslashB != nil {
-		base.UnescapeBackslashB = *overrides.UnescapeBackslashB
+		base.UnescapeBackslashB = new(*overrides.UnescapeBackslashB)
 	}
 	if overrides.UnescapeBackslashF != nil {
-		base.UnescapeBackslashF = *overrides.UnescapeBackslashF
+		base.UnescapeBackslashF = new(*overrides.UnescapeBackslashF)
 	}
 	if overrides.UnescapeBackslashN != nil {
-		base.UnescapeBackslashN = *overrides.UnescapeBackslashN
+		base.UnescapeBackslashN = new(*overrides.UnescapeBackslashN)
 	}
 	if overrides.UnescapeBackslashR != nil {
-		base.UnescapeBackslashR = *overrides.UnescapeBackslashR
+		base.UnescapeBackslashR = new(*overrides.UnescapeBackslashR)
 	}
 	if overrides.UnescapeBackslashT != nil {
-		base.UnescapeBackslashT = *overrides.UnescapeBackslashT
+		base.UnescapeBackslashT = new(*overrides.UnescapeBackslashT)
 	}
 	if overrides.UnescapeBackslashV != nil {
-		base.UnescapeBackslashV = *overrides.UnescapeBackslashV
+		base.UnescapeBackslashV = new(*overrides.UnescapeBackslashV)
 	}
 	if overrides.TransformCRLFToLF != nil {
-		base.TransformCRLFToLF = *overrides.TransformCRLFToLF
+		base.TransformCRLFToLF = new(*overrides.TransformCRLFToLF)
 	}
 	if overrides.TransformCRToLF != nil {
-		base.TransformCRToLF = *overrides.TransformCRToLF
+		base.TransformCRToLF = new(*overrides.TransformCRToLF)
 	}
 	return base
 }
 
-// NewParseConfig creates an empty *ParseConfig without applying any defaults.
+// resolveOptions returns the effective concrete options for key.
 //
-// Usage:
+// Resolution order:
+//  1. Start with the global options.
+//  2. If key has a per-key override, layer it on top.
 //
-//	cfg := NewParseConfig()                              // all zero values
-//	cfg := NewParseConfig().WithRecommendedDefaults()    // recommended defaults
-func NewParseConfig() *ParseConfig {
-	return &ParseConfig{}
-}
-
-// WithRecommendedDefaults replaces the config's base ParseOptions with
-// strict-dotenv's current recommended defaults.
-func (c *ParseConfig) WithRecommendedDefaults() *ParseConfig {
-	c.ParseOptions = resolveCustom(&defaultParseOptions)
-	return c
-}
-
-// WithBaseOptions applies partial overrides to the config's current base
-// ParseOptions. Unset fields are left unchanged.
-func (c *ParseConfig) WithBaseOptions(overrides *CustomParseOptions) *ParseConfig {
-	c.ParseOptions = applyCustomOverrides(c.ParseOptions, overrides)
-	return c
-}
-
-// WithKeyOptions returns the ParseConfig with key-specific overrides added.
-// Only set the fields you want to change; unset fields inherit from the
-// config's current base ParseOptions.
-//
-// Usage:
-//
-//	cfg := NewParseConfig().
-//		WithRecommendedDefaults().
-//		WithKeyOptions("SECRET", &CustomParseOptions{UnescapeBackslashN: BoolPtr(false)}).
-//		WithKeyOptions("TOKEN", &CustomParseOptions{Overwrite: BoolPtr(true)})
-func (c *ParseConfig) WithKeyOptions(key string, overrides *CustomParseOptions) *ParseConfig {
-	if c.KeyOptions == nil {
-		c.KeyOptions = make(map[string]ParseOptions)
-	}
-	c.KeyOptions[key] = applyCustomOverrides(c.ParseOptions, overrides)
-	return c
-}
-
-func resolveParseOptions(cfg *ParseConfig, key string) ParseOptions {
+// A nil cfg is safe and returns an all-zero resolvedOptions.
+func resolveOptions(key string, cfg *Config) resolvedOptions {
 	if cfg == nil {
-		return ParseOptions{}
+		return resolvedOptions{}
 	}
 
-	if opts, ok := cfg.KeyOptions[key]; ok {
-		return opts
+	resolved := resolvedOptions{
+		Overwrite:                    optionEnabled(cfg.globalOptions.Overwrite),
+		UnescapeBackslashBackslash:   optionEnabled(cfg.globalOptions.UnescapeBackslashBackslash),
+		UnescapeBackslashDoubleQuote: optionEnabled(cfg.globalOptions.UnescapeBackslashDoubleQuote),
+		UnescapeBackslashSingleQuote: optionEnabled(cfg.globalOptions.UnescapeBackslashSingleQuote),
+		UnescapeBackslashA:           optionEnabled(cfg.globalOptions.UnescapeBackslashA),
+		UnescapeBackslashB:           optionEnabled(cfg.globalOptions.UnescapeBackslashB),
+		UnescapeBackslashF:           optionEnabled(cfg.globalOptions.UnescapeBackslashF),
+		UnescapeBackslashN:           optionEnabled(cfg.globalOptions.UnescapeBackslashN),
+		UnescapeBackslashR:           optionEnabled(cfg.globalOptions.UnescapeBackslashR),
+		UnescapeBackslashT:           optionEnabled(cfg.globalOptions.UnescapeBackslashT),
+		UnescapeBackslashV:           optionEnabled(cfg.globalOptions.UnescapeBackslashV),
+		TransformCRLFToLF:            optionEnabled(cfg.globalOptions.TransformCRLFToLF),
+		TransformCRToLF:              optionEnabled(cfg.globalOptions.TransformCRToLF),
 	}
 
-	return cfg.ParseOptions
+	if keyOptions, ok := cfg.keyOptions[key]; ok {
+		if keyOptions.Overwrite != nil {
+			resolved.Overwrite = *keyOptions.Overwrite
+		}
+		if keyOptions.UnescapeBackslashBackslash != nil {
+			resolved.UnescapeBackslashBackslash = *keyOptions.UnescapeBackslashBackslash
+		}
+		if keyOptions.UnescapeBackslashDoubleQuote != nil {
+			resolved.UnescapeBackslashDoubleQuote = *keyOptions.UnescapeBackslashDoubleQuote
+		}
+		if keyOptions.UnescapeBackslashSingleQuote != nil {
+			resolved.UnescapeBackslashSingleQuote = *keyOptions.UnescapeBackslashSingleQuote
+		}
+		if keyOptions.UnescapeBackslashA != nil {
+			resolved.UnescapeBackslashA = *keyOptions.UnescapeBackslashA
+		}
+		if keyOptions.UnescapeBackslashB != nil {
+			resolved.UnescapeBackslashB = *keyOptions.UnescapeBackslashB
+		}
+		if keyOptions.UnescapeBackslashF != nil {
+			resolved.UnescapeBackslashF = *keyOptions.UnescapeBackslashF
+		}
+		if keyOptions.UnescapeBackslashN != nil {
+			resolved.UnescapeBackslashN = *keyOptions.UnescapeBackslashN
+		}
+		if keyOptions.UnescapeBackslashR != nil {
+			resolved.UnescapeBackslashR = *keyOptions.UnescapeBackslashR
+		}
+		if keyOptions.UnescapeBackslashT != nil {
+			resolved.UnescapeBackslashT = *keyOptions.UnescapeBackslashT
+		}
+		if keyOptions.UnescapeBackslashV != nil {
+			resolved.UnescapeBackslashV = *keyOptions.UnescapeBackslashV
+		}
+		if keyOptions.TransformCRLFToLF != nil {
+			resolved.TransformCRLFToLF = *keyOptions.TransformCRLFToLF
+		}
+		if keyOptions.TransformCRToLF != nil {
+			resolved.TransformCRToLF = *keyOptions.TransformCRToLF
+		}
+	}
+
+	return resolved
+}
+
+func optionEnabled(value *bool) bool {
+	return value != nil && *value
 }

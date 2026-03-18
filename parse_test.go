@@ -22,7 +22,7 @@ type testCase struct {
 // ---------------------------------------------------------------------------
 
 func TestNoValuesEmptyDotenv(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "empty file",
 		dotenv: "",
@@ -31,7 +31,7 @@ func TestNoValuesEmptyDotenv(t *testing.T) {
 }
 
 func TestNoValuesWhitespaceOnly(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "Dotenv with spaces only",
 		dotenv: "   ",
@@ -50,7 +50,7 @@ func TestNoValuesWhitespaceOnly(t *testing.T) {
 }
 
 func TestNoValuesWhitespaceExclusions(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "form feed is not whitespace",
 		dotenv:  "\f",
@@ -64,7 +64,7 @@ func TestNoValuesWhitespaceExclusions(t *testing.T) {
 }
 
 func TestNoValuesNewlinesOnly(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "Dotenv with LF only",
 		dotenv: "\n\n\n",
@@ -102,7 +102,7 @@ func TestNoValuesNewlinesOnly(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestKeysSupported(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "keys with only uppercase letters supported",
 		dotenv: "KEY=value",
@@ -142,7 +142,7 @@ func TestKeysSupported(t *testing.T) {
 }
 
 func TestKeysUnsupported(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "single quoted keys not supported",
 		dotenv:  "'KEY'=value",
@@ -199,7 +199,7 @@ func TestKeysUnsupported(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAssignmentOperatorErrors(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "key without eq or value is error",
 		dotenv:  "KEY",
@@ -247,7 +247,7 @@ func TestAssignmentOperatorErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestUnquoted(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "base case",
 		dotenv: "K=V\nKEY=value",
@@ -283,7 +283,7 @@ func TestUnquoted(t *testing.T) {
 }
 
 func TestUnquotedWithWhitespace(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "space between key and eq ok",
 		dotenv: "KEY =value",
@@ -366,7 +366,7 @@ func TestUnquotedWithWhitespace(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSingleQuoted(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "single quote base case",
 		dotenv: "KEY='value'",
@@ -385,7 +385,7 @@ func TestSingleQuoted(t *testing.T) {
 }
 
 func TestSingleQuotedWithWhitespace(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "spaces between key and value",
 		dotenv: "KEY = 'value'",
@@ -415,7 +415,7 @@ func TestSingleQuotedWithWhitespace(t *testing.T) {
 }
 
 func TestSingleQuotedEscaping(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "backslash is literal in single-quoted values",
 		dotenv: "KEY='back\\slash'",
@@ -433,7 +433,7 @@ func TestSingleQuotedEscaping(t *testing.T) {
 	})
 }
 func TestAllowedContentAfterClosingSingleQuote(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "tab after closing single quote ok",
 		dotenv: "KEY='line1'\t",
@@ -462,7 +462,7 @@ func TestAllowedContentAfterClosingSingleQuote(t *testing.T) {
 }
 
 func TestSingleQuotedErrorCases(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "single quotes treat backslashes as literal",
 		dotenv:  "KEY='Value\\''",
@@ -519,12 +519,12 @@ func TestSingleQuotedErrorCases(t *testing.T) {
 // Test Double-Quoted Values
 // ---------------------------------------------------------------------------
 //
-// 	- Supports default unescaping of \\, \", \n, \t, and \r
-// 	- Supports optional transforms of unescaped newlines (e.g. \r\n -> \n)
+// 	- With an empty Config, escape sequences are preserved literally
+// 	- Actual newlines inside double quotes are preserved unless transforms are enabled
 // ---------------------------------------------------------------------------
 
 func TestDoubleQuoted(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "double quote base case",
 		dotenv: "KEY=\"value\"",
@@ -541,19 +541,19 @@ func TestDoubleQuoted(t *testing.T) {
 		want:   EnvStore{"KEY1": "Value 1", "KEY2": "Value 2"},
 	})
 
-	run(t, nil, cfg, testCase{name: "value with escaped double quote",
-		dotenv: "KEY=\"Value \\\"1\\\"\"",
-		want:   EnvStore{"KEY": `Value "1"`},
+	run(t, nil, cfg, testCase{name: "backslash before closing double quote is a literal backslash",
+		dotenv: `KEY="value\"`,
+		want:   EnvStore{"KEY": `value\`},
 	})
 
-	run(t, nil, cfg, testCase{name: "value with escape sequences",
-		dotenv: "KEY=\"line1\\nline2\\t\\r\\\\\"",
-		want:   EnvStore{"KEY": "line1\nline2\t\n\\"},
+	run(t, nil, cfg, testCase{name: "value with escape sequences - not unescaped with empty Config",
+		dotenv: "KEY=\"Line1\\nStillLine1\\t\\r\\\\\"",
+		want:   EnvStore{"KEY": `Line1\nStillLine1\t\r\\`},
 	})
 }
 
 func TestDoubleQuotedWithWhitespaceAndNewlines(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "spaces between key and value",
 		dotenv: "KEY = \"value\"",
@@ -593,7 +593,7 @@ func TestDoubleQuotedWithWhitespaceAndNewlines(t *testing.T) {
 }
 
 func TestDoubleQuotedMultiLine(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "basic multi-line value",
 		dotenv: "KEY=\"line1\nline2\nline3\"",
@@ -615,14 +615,14 @@ func TestDoubleQuotedMultiLine(t *testing.T) {
 		want:   EnvStore{"KEY": "\nline1\nline2\nline3\n"},
 	})
 
-	run(t, nil, cfg, testCase{name: "normalize each CRLF and CR to LF in multi-line value",
+	run(t, nil, cfg, testCase{name: "preserve each CRLF and CR in multi-line value",
 		dotenv: "KEY=\"\r\nline1\r\rline2\r\n\r\n \tline3\r\n\"",
-		want:   EnvStore{"KEY": "\nline1\n\nline2\n\n \tline3\n"},
+		want:   EnvStore{"KEY": "\r\nline1\r\rline2\r\n\r\n \tline3\r\n"},
 	})
 }
 
 func TestDoubleQuotedUnknownEscapeLiteral(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "unknown escape \\u passes through literally",
 		dotenv: "KEY=\"\\u0041\"",
@@ -651,7 +651,7 @@ func TestDoubleQuotedUnknownEscapeLiteral(t *testing.T) {
 }
 
 func TestDoubleQuotedErrorCases(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "missing closing double quote one line",
 		dotenv:  "KEY=\"VALUE",
@@ -663,8 +663,8 @@ func TestDoubleQuotedErrorCases(t *testing.T) {
 		wantErr: true,
 	})
 
-	run(t, nil, cfg, testCase{name: "escaped closing double quote consumes the quote leaving no real close",
-		dotenv:  `KEY="value\"`,
+	run(t, nil, cfg, testCase{name: "backslash does not escape double quote; it becomes a closing double quote",
+		dotenv:  "KEY=\"value\\\"extra\"",
 		wantErr: true,
 	})
 
@@ -709,7 +709,7 @@ func TestDoubleQuotedErrorCases(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestExportCases(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "multiple exports with different quoting styles",
 		dotenv: "export K1=v1\nexport K2='v2'\nexport K3=\"v3\"",
@@ -753,7 +753,7 @@ func TestExportCases(t *testing.T) {
 }
 
 func TestNonExportCases(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "export is the key if no key after export",
 		dotenv: "export = value",
@@ -762,7 +762,7 @@ func TestNonExportCases(t *testing.T) {
 }
 
 func TestExportErrorCases(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "export alone on line is error",
 		dotenv:  "export",
@@ -795,7 +795,7 @@ func TestExportErrorCases(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCommentCases(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "line comment",
 		dotenv: "# KEY=value",
@@ -879,7 +879,7 @@ func TestCommentCases(t *testing.T) {
 }
 
 func TestNonCommentCases(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "hash as unquoted value is not a comment",
 		dotenv: "KEY=#",
@@ -912,7 +912,7 @@ func TestNonCommentCases(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDollarSignLiteralInUnquotedValue(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "dollar sign in unquoted value is literal",
 		dotenv: "KEY=$NOTAVAR",
@@ -940,7 +940,7 @@ func TestDollarSignLiteralInUnquotedValue(t *testing.T) {
 	})
 }
 func TestDollarSignLiteralInSingleQuotedValue(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "dollar sign in single quoted value is literal",
 		dotenv: "KEY='$NOTAVAR'",
@@ -968,7 +968,7 @@ func TestDollarSignLiteralInSingleQuotedValue(t *testing.T) {
 	})
 }
 func TestDollarSignLiteralInDoubleQuotedValue(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "dollar sign in double quoted value is literal",
 		dotenv: `KEY="$NOTAVAR"`,
@@ -1001,7 +1001,7 @@ func TestDollarSignLiteralInDoubleQuotedValue(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestEdgeCases(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "multiple eq",
 		dotenv: "KEY==Value=With=Equals=",
@@ -1035,7 +1035,7 @@ func TestEdgeCases(t *testing.T) {
 }
 
 func TestBOM(t *testing.T) {
-	cfg := NewParseConfig().WithRecommendedDefaults()
+	cfg := new(Config)
 
 	run(t, nil, cfg, testCase{name: "BOM at start of file followed by key is ignored",
 		dotenv: "\uFEFFKEY=value",
@@ -1072,7 +1072,7 @@ func TestBOM(t *testing.T) {
 // Test runner
 // ---------------------------------------------------------------------------
 
-func run(t *testing.T, store EnvStore, cfg *ParseConfig, testCase testCase) {
+func run(t *testing.T, store EnvStore, cfg *Config, testCase testCase) {
 	t.Helper()
 
 	t.Run(testCase.name, func(t *testing.T) {
