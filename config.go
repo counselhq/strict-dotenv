@@ -19,12 +19,12 @@ package strictdotenv
 // overrides that layer on top of the global baseline, or [Config.SetKeyOptions]
 // to replace one key's overrides outright.
 //
-// Option scoping for EnvStore.ProcessValue and EnvStore.ProcessValues:
+// Option scoping for Store.TransformValue and Store.TransformValues:
 //   - [Options.Overwrite] is ignored
 //   - All other options apply through the same double-quoted value processing
 //     pipeline the parser uses
 //
-// Option scoping for EnvStore.SetFrom* methods:
+// Option scoping for Store.Parse* methods:
 //   - [Options.Overwrite] applies to unquoted, single-quoted, and double-quoted values
 //   - All other options apply only to double-quoted values
 //
