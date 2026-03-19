@@ -418,4 +418,4 @@ Currently, only 1.26 is supported. Starting with 1.27, we will support the curre
 
 ## License
 
-[MIT LICENSE](LICENSE).
+[MIT](LICENSE).
