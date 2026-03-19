@@ -1,14 +1,13 @@
 package strictdotenv
 
 import (
-	"maps"
 	"testing"
 )
 
 type testCase struct {
 	name    string
 	dotenv  string
-	want    Store
+	want    map[string]string
 	wantErr bool
 }
 
@@ -26,7 +25,7 @@ func TestNoValuesEmptyDotenv(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "empty file",
 		dotenv: "",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 }
 
@@ -35,17 +34,17 @@ func TestNoValuesWhitespaceOnly(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "Dotenv with spaces only",
 		dotenv: "   ",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 
 	run(t, nil, cfg, testCase{name: "Dotenv with tabs only",
 		dotenv: "\t\t\t",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 
 	run(t, nil, cfg, testCase{name: "Dotenv with spaces and tabs only",
 		dotenv: "\t \t \t",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 }
 
@@ -68,27 +67,27 @@ func TestNoValuesNewlinesOnly(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "Dotenv with LF only",
 		dotenv: "\n\n\n",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 
 	run(t, nil, cfg, testCase{name: "Dotenv with CR only",
 		dotenv: "\r\r\r",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 
 	run(t, nil, cfg, testCase{name: "Dotenv with CRLF only",
 		dotenv: "\r\n\r\n\r\n",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 
 	run(t, nil, cfg, testCase{name: "Dotenv with LF CR and CRLF only",
 		dotenv: "\n\r\r\n",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 
 	run(t, nil, cfg, testCase{name: "Dotenv with mixed newlines and whitespace only",
 		dotenv: " \n\t\r \r\n \t\r",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 }
 
@@ -106,38 +105,38 @@ func TestKeysSupported(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "keys with only uppercase letters supported",
 		dotenv: "KEY=value",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "keys with only lowercase letters supported",
 		dotenv: "key=value",
-		want:   Store{"key": "value"},
+		want:   map[string]string{"key": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "keys with only underscores supported",
 		dotenv: "_=value\n___=value2",
-		want:   Store{"_": "value", "___": "value2"},
+		want:   map[string]string{"_": "value", "___": "value2"},
 	})
 
 	run(t, nil, cfg, testCase{name: "keys with digits supported",
 		dotenv: "KEY1=value",
-		want:   Store{"KEY1": "value"},
+		want:   map[string]string{"KEY1": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "keys with mixed case letters, digits, and underscores supported",
 		dotenv: "_K_e_Y_1=value",
-		want:   Store{"_K_e_Y_1": "value"},
+		want:   map[string]string{"_K_e_Y_1": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "keys with leading and trailing underscores supported",
 		dotenv: "__SECRET_KEY___=value",
-		want:   Store{"__SECRET_KEY___": "value"},
+		want:   map[string]string{"__SECRET_KEY___": "value"},
 	})
 
 	run(t, nil, cfg, testCase{
 		name:   "keys are case sensitive",
 		dotenv: "KEY=upper\nkey=lower\nKeY=MixedCase",
-		want:   Store{"KEY": "upper", "key": "lower", "KeY": "MixedCase"},
+		want:   map[string]string{"KEY": "upper", "key": "lower", "KeY": "MixedCase"},
 	})
 }
 
@@ -251,34 +250,34 @@ func TestUnquoted(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "base case",
 		dotenv: "K=V\nKEY=value",
-		want:   Store{"K": "V", "KEY": "value"},
+		want:   map[string]string{"K": "V", "KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "key eq then LF | CR | CRLF | EOF is empty value",
 		dotenv: "KEY=\nKEY2=\rKEY3=\r\nKEY4=",
-		want:   Store{"KEY": "", "KEY2": "", "KEY3": "", "KEY4": ""},
+		want:   map[string]string{"KEY": "", "KEY2": "", "KEY3": "", "KEY4": ""},
 	})
 
 	run(t, nil, cfg, testCase{
 		name:   "key eq space then LF | CR | CRLF | EOF is empty value",
 		dotenv: "KEY= \nKEY2= \rKEY3= \r\nKEY4= ",
-		want:   Store{"KEY": "", "KEY2": "", "KEY3": "", "KEY4": ""},
+		want:   map[string]string{"KEY": "", "KEY2": "", "KEY3": "", "KEY4": ""},
 	})
 
 	run(t, nil, cfg, testCase{
 		name:   "key eq tab then LF | CR | CRLF | EOF is empty value",
 		dotenv: "KEY=\t\nKEY2=\t\rKEY3=\t\r\nKEY4=\t",
-		want:   Store{"KEY": "", "KEY2": "", "KEY3": "", "KEY4": ""},
+		want:   map[string]string{"KEY": "", "KEY2": "", "KEY3": "", "KEY4": ""},
 	})
 
 	run(t, nil, cfg, testCase{name: "if starts unquoted, treat any single quotes as literals",
 		dotenv: "KEY=a'b'c'd'e",
-		want:   Store{"KEY": "a'b'c'd'e"},
+		want:   map[string]string{"KEY": "a'b'c'd'e"},
 	})
 
 	run(t, nil, cfg, testCase{name: "if starts unquoted, treat any double quotes as literals",
 		dotenv: `KEY=a"b"c"d"e`,
-		want:   Store{"KEY": `a"b"c"d"e`},
+		want:   map[string]string{"KEY": `a"b"c"d"e`},
 	})
 }
 
@@ -287,73 +286,73 @@ func TestUnquotedWithWhitespace(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "space between key and eq ok",
 		dotenv: "KEY =value",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "space between eq and value ok",
 		dotenv: "KEY= value",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "spaces between key and value ok",
 		dotenv: "KEY = value",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "multiple spaces around key and eq and value ok",
 		dotenv: "  KEY  =  value  ",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "spaces around eq and inside value ok",
 		dotenv: "KEY = value with spaces",
-		want:   Store{"KEY": "value with spaces"},
+		want:   map[string]string{"KEY": "value with spaces"},
 	})
 
 	run(t, nil, cfg, testCase{name: "tabs around eq and inside value ok",
 		dotenv: "KEY\t=\tvalue\twith\tspaces",
-		want:   Store{"KEY": "value\twith\tspaces"},
+		want:   map[string]string{"KEY": "value\twith\tspaces"},
 	})
 
 	run(t, nil, cfg, testCase{name: "spaces inside value ending in space hyphen ok",
 		dotenv: "KEY = value with spaces -",
-		want:   Store{"KEY": "value with spaces -"},
+		want:   map[string]string{"KEY": "value with spaces -"},
 	})
 
 	run(t, nil, cfg, testCase{name: "trailing spaces after unquoted values are trimmed",
 		dotenv: "KEY = value with trailing spaces  ",
-		want:   Store{"KEY": "value with trailing spaces"},
+		want:   map[string]string{"KEY": "value with trailing spaces"},
 	})
 
 	run(t, nil, cfg, testCase{name: "trailing tabs after unquoted values are trimmed",
 		dotenv: "KEY = value\twith\ttrailing\tspaces\t\t",
-		want:   Store{"KEY": "value\twith\ttrailing\tspaces"},
+		want:   map[string]string{"KEY": "value\twith\ttrailing\tspaces"},
 	})
 
 	run(t, nil, cfg, testCase{
 		name:   "mixed tabs and spaces around eq",
 		dotenv: " KEY\t\t= \tvalue\t\nKEY2 \t =value2\t\t",
-		want:   Store{"KEY": "value", "KEY2": "value2"},
+		want:   map[string]string{"KEY": "value", "KEY2": "value2"},
 	})
 
 	run(t, nil, cfg, testCase{name: "LF at start and end of file",
 		dotenv: "\nKEY=VALUE\n\n\n",
-		want:   Store{"KEY": "VALUE"},
+		want:   map[string]string{"KEY": "VALUE"},
 	})
 
 	run(t, nil, cfg, testCase{name: "mixed newlines and whitespace",
 		dotenv: "\r\n\r\nKEY\t=\tVALUE\r\n\r\n\r\n",
-		want:   Store{"KEY": "VALUE"},
+		want:   map[string]string{"KEY": "VALUE"},
 	})
 
 	run(t, nil, cfg, testCase{name: "other special characters taken as-is in unquoted values",
 		dotenv: "KEY=VALUE\a\b\f\v\t",
-		want:   Store{"KEY": "VALUE\a\b\f\v"},
+		want:   map[string]string{"KEY": "VALUE\a\b\f\v"},
 	})
 
 	run(t, nil, cfg, testCase{name: "escape sequences treated as literals in unquoted values",
 		dotenv: `KEY=-\\\a\b\f\v\t\n\r\`,
-		want:   Store{"KEY": `-\\\a\b\f\v\t\n\r\`},
+		want:   map[string]string{"KEY": `-\\\a\b\f\v\t\n\r\`},
 	})
 }
 
@@ -370,17 +369,17 @@ func TestSingleQuoted(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "single quote base case",
 		dotenv: "KEY='value'",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "empty single quote",
 		dotenv: "KEY=''",
-		want:   Store{"KEY": ""},
+		want:   map[string]string{"KEY": ""},
 	})
 
 	run(t, nil, cfg, testCase{name: "multiple single quoted key-value pairs",
 		dotenv: "KEY1='Value 1'\nKEY2='Value 2'",
-		want:   Store{"KEY1": "Value 1", "KEY2": "Value 2"},
+		want:   map[string]string{"KEY1": "Value 1", "KEY2": "Value 2"},
 	})
 }
 
@@ -389,28 +388,28 @@ func TestSingleQuotedWithWhitespace(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "spaces between key and value",
 		dotenv: "KEY = 'value'",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "multiple spaces around key and eq and value",
 		dotenv: "  KEY  =  'value'  ",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "preserve all whitespace inside single quotes",
 		dotenv: "KEY = '	\tvalue with\ttrailing tabs	\t	\t'",
-		want:   Store{"KEY": "	\tvalue with\ttrailing tabs	\t	\t"},
+		want:   map[string]string{"KEY": "	\tvalue with\ttrailing tabs	\t	\t"},
 	})
 
 	run(t, nil, cfg, testCase{
 		name:   "different types of whitespace outside of single quotes",
 		dotenv: " KEY\t\t= \t'value'\t\nKEY2 \t ='value2'\t\t",
-		want:   Store{"KEY": "value", "KEY2": "value2"},
+		want:   map[string]string{"KEY": "value", "KEY2": "value2"},
 	})
 
 	run(t, nil, cfg, testCase{name: "mixed newlines before key and after single quoted value",
 		dotenv: "\r\n\nKEY='VALUE'\n\r\n\r\n\n\n",
-		want:   Store{"KEY": "VALUE"},
+		want:   map[string]string{"KEY": "VALUE"},
 	})
 }
 
@@ -419,17 +418,17 @@ func TestSingleQuotedEscaping(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "backslash is literal in single-quoted values",
 		dotenv: "KEY='back\\slash'",
-		want:   Store{"KEY": `back\slash`},
+		want:   map[string]string{"KEY": `back\slash`},
 	})
 
 	run(t, nil, cfg, testCase{name: "backslash before closing single quote is ok literal",
 		dotenv: "KEY='value\\'",
-		want:   Store{"KEY": `value\`},
+		want:   map[string]string{"KEY": `value\`},
 	})
 
 	run(t, nil, cfg, testCase{name: "escape sequences treated as literals in single quoted values",
 		dotenv: `KEY='-\\\a\b\f\v\t\n\r\'`,
-		want:   Store{"KEY": `-\\\a\b\f\v\t\n\r\`},
+		want:   map[string]string{"KEY": `-\\\a\b\f\v\t\n\r\`},
 	})
 }
 func TestAllowedContentAfterClosingSingleQuote(t *testing.T) {
@@ -437,27 +436,27 @@ func TestAllowedContentAfterClosingSingleQuote(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "tab after closing single quote ok",
 		dotenv: "KEY='line1'\t",
-		want:   Store{"KEY": "line1"},
+		want:   map[string]string{"KEY": "line1"},
 	})
 
 	run(t, nil, cfg, testCase{name: "space after closing single quote ok",
 		dotenv: "KEY='line1' ",
-		want:   Store{"KEY": "line1"},
+		want:   map[string]string{"KEY": "line1"},
 	})
 
 	run(t, nil, cfg, testCase{name: "no space then inline comment after closing single quote ok",
 		dotenv: "KEY='line1'# comment",
-		want:   Store{"KEY": "line1"},
+		want:   map[string]string{"KEY": "line1"},
 	})
 
 	run(t, nil, cfg, testCase{name: "space then inline comment after closing single quote ok",
 		dotenv: "KEY='line1' # comment",
-		want:   Store{"KEY": "line1"},
+		want:   map[string]string{"KEY": "line1"},
 	})
 
 	run(t, nil, cfg, testCase{name: "tab then inline comment after closing single quote ok",
 		dotenv: "KEY='line1'\t# comment",
-		want:   Store{"KEY": "line1"},
+		want:   map[string]string{"KEY": "line1"},
 	})
 }
 
@@ -528,27 +527,27 @@ func TestDoubleQuoted(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "double quote base case",
 		dotenv: "KEY=\"value\"",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "empty double quoted value",
 		dotenv: "KEY=\"\"",
-		want:   Store{"KEY": ""},
+		want:   map[string]string{"KEY": ""},
 	})
 
 	run(t, nil, cfg, testCase{name: "multiple double quoted key-value pairs",
 		dotenv: "KEY1=\"Value 1\"\nKEY2=\"Value 2\"",
-		want:   Store{"KEY1": "Value 1", "KEY2": "Value 2"},
+		want:   map[string]string{"KEY1": "Value 1", "KEY2": "Value 2"},
 	})
 
 	run(t, nil, cfg, testCase{name: "backslash before closing double quote is a literal backslash",
 		dotenv: `KEY="value\"`,
-		want:   Store{"KEY": `value\`},
+		want:   map[string]string{"KEY": `value\`},
 	})
 
 	run(t, nil, cfg, testCase{name: "value with escape sequences - not unescaped with empty Config",
 		dotenv: "KEY=\"Line1\\nStillLine1\\t\\r\\\\\"",
-		want:   Store{"KEY": `Line1\nStillLine1\t\r\\`},
+		want:   map[string]string{"KEY": `Line1\nStillLine1\t\r\\`},
 	})
 }
 
@@ -557,38 +556,38 @@ func TestDoubleQuotedWithWhitespaceAndNewlines(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "spaces between key and value",
 		dotenv: "KEY = \"value\"",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "multiple spaces around key and eq and value",
 		dotenv: "  KEY  =  \"value\"  ",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "spaces and tabs inside double quotes are preserved",
 		dotenv: "KEY = \"value\twith trailing spaces  \t\"",
-		want:   Store{"KEY": "value\twith trailing spaces  \t"},
+		want:   map[string]string{"KEY": "value\twith trailing spaces  \t"},
 	})
 
 	run(t, nil, cfg, testCase{
 		name:   "mixed whitespace outside of double quote",
 		dotenv: " KEY\t\t= \t\"value\"\t\nKEY2 \t =\"value2\"   \t\t",
-		want:   Store{"KEY": "value", "KEY2": "value2"},
+		want:   map[string]string{"KEY": "value", "KEY2": "value2"},
 	})
 
 	run(t, nil, cfg, testCase{name: "newlines LF",
 		dotenv: "\nKEY=\"VALUE\"\n\n\n",
-		want:   Store{"KEY": "VALUE"},
+		want:   map[string]string{"KEY": "VALUE"},
 	})
 
 	run(t, nil, cfg, testCase{name: "newlines CRLF",
 		dotenv: "\r\n\r\nKEY=\"VALUE\"\r\n\r\n\r\n",
-		want:   Store{"KEY": "VALUE"},
+		want:   map[string]string{"KEY": "VALUE"},
 	})
 
 	run(t, nil, cfg, testCase{name: "newlines mixed",
 		dotenv: "\r\n\nKEY=\"VALUE\"\n\r\n\r\n\n\n",
-		want:   Store{"KEY": "VALUE"},
+		want:   map[string]string{"KEY": "VALUE"},
 	})
 }
 
@@ -597,27 +596,27 @@ func TestDoubleQuotedMultiLine(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "basic multi-line value",
 		dotenv: "KEY=\"line1\nline2\nline3\"",
-		want:   Store{"KEY": "line1\nline2\nline3"},
+		want:   map[string]string{"KEY": "line1\nline2\nline3"},
 	})
 
 	run(t, nil, cfg, testCase{name: "multi-line value with export and unspaced comment",
 		dotenv: "export KEY=\"line1\nline2\nline3\"#comment",
-		want:   Store{"KEY": "line1\nline2\nline3"},
+		want:   map[string]string{"KEY": "line1\nline2\nline3"},
 	})
 
 	run(t, nil, cfg, testCase{name: "multi-line value with space comment",
 		dotenv: "KEY=\"line1\nline2\nline3\" # comment",
-		want:   Store{"KEY": "line1\nline2\nline3"},
+		want:   map[string]string{"KEY": "line1\nline2\nline3"},
 	})
 
 	run(t, nil, cfg, testCase{name: "multi-line value preserve leading and trailing LF",
 		dotenv: "KEY=\"\nline1\nline2\nline3\n\"",
-		want:   Store{"KEY": "\nline1\nline2\nline3\n"},
+		want:   map[string]string{"KEY": "\nline1\nline2\nline3\n"},
 	})
 
 	run(t, nil, cfg, testCase{name: "preserve each CRLF and CR in multi-line value",
 		dotenv: "KEY=\"\r\nline1\r\rline2\r\n\r\n \tline3\r\n\"",
-		want:   Store{"KEY": "\r\nline1\r\rline2\r\n\r\n \tline3\r\n"},
+		want:   map[string]string{"KEY": "\r\nline1\r\rline2\r\n\r\n \tline3\r\n"},
 	})
 }
 
@@ -626,27 +625,27 @@ func TestDoubleQuotedUnknownEscapeLiteral(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "unknown escape \\u passes through literally",
 		dotenv: "KEY=\"\\u0041\"",
-		want:   Store{"KEY": `\u0041`},
+		want:   map[string]string{"KEY": `\u0041`},
 	})
 
 	run(t, nil, cfg, testCase{name: "unknown escape \\x passes through literally",
 		dotenv: "KEY=\"\\x41\"",
-		want:   Store{"KEY": `\x41`},
+		want:   map[string]string{"KEY": `\x41`},
 	})
 
 	run(t, nil, cfg, testCase{name: "escaped dollar sign passes through literally",
 		dotenv: "KEY=\"\\$NOTAVAR\"",
-		want:   Store{"KEY": `\$NOTAVAR`},
+		want:   map[string]string{"KEY": `\$NOTAVAR`},
 	})
 
 	run(t, nil, cfg, testCase{name: "unknown escape \\0 passes through literally",
 		dotenv: "KEY=\"\\0\"",
-		want:   Store{"KEY": `\0`},
+		want:   map[string]string{"KEY": `\0`},
 	})
 
 	run(t, nil, cfg, testCase{name: "unknown escape with unicode char passes through literally",
 		dotenv: "KEY=\"\\é\"",
-		want:   Store{"KEY": `\é`},
+		want:   map[string]string{"KEY": `\é`},
 	})
 }
 
@@ -713,42 +712,42 @@ func TestExportCases(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "multiple exports with different quoting styles",
 		dotenv: "export K1=v1\nexport K2='v2'\nexport K3=\"v3\"",
-		want:   Store{"K1": "v1", "K2": "v2", "K3": "v3"},
+		want:   map[string]string{"K1": "v1", "K2": "v2", "K3": "v3"},
 	})
 
 	run(t, nil, cfg, testCase{name: "tabs around export",
 		dotenv: "\texport\tKEY=value",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "multiple whitespace around export",
 		dotenv: "\t \t export\t\t\t  KEY=value  ",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "requires whitespace between export and key",
 		dotenv: "exportKEY=value",
-		want:   Store{"exportKEY": "value"},
+		want:   map[string]string{"exportKEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "export with inline comment",
 		dotenv: "export KEY=value # comment",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "export with export key",
 		dotenv: "export export=value",
-		want:   Store{"export": "value"},
+		want:   map[string]string{"export": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "export with EXPORT key",
 		dotenv: "export EXPORT=value",
-		want:   Store{"EXPORT": "value"},
+		want:   map[string]string{"EXPORT": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "export mid file",
 		dotenv: "K1=V1\nexport KEY=value",
-		want:   Store{"K1": "V1", "KEY": "value"},
+		want:   map[string]string{"K1": "V1", "KEY": "value"},
 	})
 }
 
@@ -757,7 +756,7 @@ func TestNonExportCases(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "export is the key if no key after export",
 		dotenv: "export = value",
-		want:   Store{"export": "value"},
+		want:   map[string]string{"export": "value"},
 	})
 }
 
@@ -799,82 +798,82 @@ func TestCommentCases(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "line comment",
 		dotenv: "# KEY=value",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 
 	run(t, nil, cfg, testCase{name: "line comment with leading spaces and tabs",
 		dotenv: "  \t \t# KEY=value",
-		want:   Store{},
+		want:   map[string]string{},
 	})
 
 	run(t, nil, cfg, testCase{name: "line comment does not impact next line",
 		dotenv: "# KEY1=value1\nKEY2=value2",
-		want:   Store{"KEY2": "value2"},
+		want:   map[string]string{"KEY2": "value2"},
 	})
 
 	run(t, nil, cfg, testCase{name: "line comment with multiple hashes",
 		dotenv: "## K=V ## \nKEY=value",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "space inline comment after unquoted value",
 		dotenv: "KEY=value # K=V",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "tab inline comment after unquoted value",
 		dotenv: "KEY=value\t# K=V",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "inline comment after unquoted value with internal spaces",
 		dotenv: "KEY=the big cat # K=V",
-		want:   Store{"KEY": "the big cat"},
+		want:   map[string]string{"KEY": "the big cat"},
 	})
 
 	run(t, nil, cfg, testCase{name: "space hash after unquoted value",
 		dotenv: "KEY=value #",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "space hash alphanumeric after unquoted value with internal space",
 		dotenv: "KEY=word1 word2 #COMMENT1",
-		want:   Store{"KEY": "word1 word2"},
+		want:   map[string]string{"KEY": "word1 word2"},
 	})
 
 	run(t, nil, cfg, testCase{name: "tab hash after unquoted value",
 		dotenv: "KEY=value\t#",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "comment after single quoted value no space",
 		dotenv: "KEY='value'# K=V",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "comment after single quoted value with space",
 		dotenv: "KEY='value' # K=V",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "comment after single quoted value with tab",
 		dotenv: "KEY='value'\t# K=V",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "comment after double quoted value no space",
 		dotenv: "KEY=\"value\"# K=V",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "comment after double quoted value with space",
 		dotenv: "KEY=\"value\" # K=V",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "comment after double quoted value with tab",
 		dotenv: "KEY=\"value\"\t# K=V",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 }
 
@@ -883,27 +882,27 @@ func TestNonCommentCases(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "hash as unquoted value is not a comment",
 		dotenv: "KEY=#",
-		want:   Store{"KEY": "#"},
+		want:   map[string]string{"KEY": "#"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unquoted value with hash without preceding space is not a comment",
 		dotenv: "KEY=value#comment",
-		want:   Store{"KEY": "value#comment"},
+		want:   map[string]string{"KEY": "value#comment"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unquoted value with multiple hashes without preceding whitespace is not a comment",
 		dotenv: "KEY=#value#example# # K=V",
-		want:   Store{"KEY": "#value#example#"},
+		want:   map[string]string{"KEY": "#value#example#"},
 	})
 
 	run(t, nil, cfg, testCase{name: "hash inside single quoted value is literal even if preceded by space",
 		dotenv: "KEY='value # not comment'",
-		want:   Store{"KEY": "value # not comment"},
+		want:   map[string]string{"KEY": "value # not comment"},
 	})
 
 	run(t, nil, cfg, testCase{name: "hash inside double quoted value is literal even if preceded by space",
 		dotenv: `KEY="value # not comment"`,
-		want:   Store{"KEY": "value # not comment"},
+		want:   map[string]string{"KEY": "value # not comment"},
 	})
 }
 
@@ -916,27 +915,27 @@ func TestDollarSignLiteralInUnquotedValue(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "dollar sign in unquoted value is literal",
 		dotenv: "KEY=$NOTAVAR",
-		want:   Store{"KEY": "$NOTAVAR"},
+		want:   map[string]string{"KEY": "$NOTAVAR"},
 	})
 
 	run(t, nil, cfg, testCase{name: "dollar sign with curly braces in unquoted value is literal",
 		dotenv: "KEY=${NOTAVAR}",
-		want:   Store{"KEY": "${NOTAVAR}"},
+		want:   map[string]string{"KEY": "${NOTAVAR}"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unclosed variable substitution syntax in unquoted value is literal",
 		dotenv: "KEY=${NOTAVAR",
-		want:   Store{"KEY": "${NOTAVAR"},
+		want:   map[string]string{"KEY": "${NOTAVAR"},
 	})
 
 	run(t, nil, cfg, testCase{name: "dollar sign with parens in unquoted value is literal",
 		dotenv: "KEY=$(NOTACMD)",
-		want:   Store{"KEY": "$(NOTACMD)"},
+		want:   map[string]string{"KEY": "$(NOTACMD)"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unclosed command substitution syntax in unquoted value is literal",
 		dotenv: "KEY=$(NOTACMD",
-		want:   Store{"KEY": "$(NOTACMD"},
+		want:   map[string]string{"KEY": "$(NOTACMD"},
 	})
 }
 func TestDollarSignLiteralInSingleQuotedValue(t *testing.T) {
@@ -944,27 +943,27 @@ func TestDollarSignLiteralInSingleQuotedValue(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "dollar sign in single quoted value is literal",
 		dotenv: "KEY='$NOTAVAR'",
-		want:   Store{"KEY": "$NOTAVAR"},
+		want:   map[string]string{"KEY": "$NOTAVAR"},
 	})
 
 	run(t, nil, cfg, testCase{name: "dollar sign with curly braces in single quoted value is literal",
 		dotenv: "KEY='${NOTAVAR}'",
-		want:   Store{"KEY": "${NOTAVAR}"},
+		want:   map[string]string{"KEY": "${NOTAVAR}"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unclosed variable substitution syntax in single quoted value is literal",
 		dotenv: "KEY='${NOTAVAR'",
-		want:   Store{"KEY": "${NOTAVAR"},
+		want:   map[string]string{"KEY": "${NOTAVAR"},
 	})
 
 	run(t, nil, cfg, testCase{name: "dollar sign with parens in single quoted value is literal",
 		dotenv: "KEY='$(NOTACMD)'",
-		want:   Store{"KEY": "$(NOTACMD)"},
+		want:   map[string]string{"KEY": "$(NOTACMD)"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unclosed command substitution syntax in single quoted value is literal",
 		dotenv: "KEY='$(NOTACMD'",
-		want:   Store{"KEY": "$(NOTACMD"},
+		want:   map[string]string{"KEY": "$(NOTACMD"},
 	})
 }
 func TestDollarSignLiteralInDoubleQuotedValue(t *testing.T) {
@@ -972,27 +971,27 @@ func TestDollarSignLiteralInDoubleQuotedValue(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "dollar sign in double quoted value is literal",
 		dotenv: `KEY="$NOTAVAR"`,
-		want:   Store{"KEY": "$NOTAVAR"},
+		want:   map[string]string{"KEY": "$NOTAVAR"},
 	})
 
 	run(t, nil, cfg, testCase{name: "dollar sign with curly braces in double quoted value is literal",
 		dotenv: `KEY="${NOTAVAR}"`,
-		want:   Store{"KEY": "${NOTAVAR}"},
+		want:   map[string]string{"KEY": "${NOTAVAR}"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unclosed variable substitution syntax in double quoted value is literal",
 		dotenv: `KEY="${NOTAVAR"`,
-		want:   Store{"KEY": "${NOTAVAR"},
+		want:   map[string]string{"KEY": "${NOTAVAR"},
 	})
 
 	run(t, nil, cfg, testCase{name: "dollar sign with parens in double quoted value is literal",
 		dotenv: `KEY="$(NOTACMD)"`,
-		want:   Store{"KEY": "$(NOTACMD)"},
+		want:   map[string]string{"KEY": "$(NOTACMD)"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unclosed command substitution syntax in double quoted value is literal",
 		dotenv: `KEY="$(NOTACMD"`,
-		want:   Store{"KEY": "$(NOTACMD"},
+		want:   map[string]string{"KEY": "$(NOTACMD"},
 	})
 }
 
@@ -1005,32 +1004,32 @@ func TestEdgeCases(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "multiple eq",
 		dotenv: "KEY==Value=With=Equals=",
-		want:   Store{"KEY": "=Value=With=Equals="},
+		want:   map[string]string{"KEY": "=Value=With=Equals="},
 	})
 
 	run(t, nil, cfg, testCase{name: "key space eq eq space value",
 		dotenv: "KEY == Value",
-		want:   Store{"KEY": "= Value"},
+		want:   map[string]string{"KEY": "= Value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "back ticked values do not act like quotes",
 		dotenv: "KEY=`value # comment`",
-		want:   Store{"KEY": "`value"},
+		want:   map[string]string{"KEY": "`value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unicode characters in unquoted value",
 		dotenv: "KEY=héllo wörld",
-		want:   Store{"KEY": "héllo wörld"},
+		want:   map[string]string{"KEY": "héllo wörld"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unicode characters in single quoted value",
 		dotenv: "KEY='héllo wörld'",
-		want:   Store{"KEY": "héllo wörld"},
+		want:   map[string]string{"KEY": "héllo wörld"},
 	})
 
 	run(t, nil, cfg, testCase{name: "unicode characters in double-quoted value",
 		dotenv: "KEY=\"naïve café\"",
-		want:   Store{"KEY": "naïve café"},
+		want:   map[string]string{"KEY": "naïve café"},
 	})
 }
 
@@ -1039,22 +1038,22 @@ func TestBOM(t *testing.T) {
 
 	run(t, nil, cfg, testCase{name: "BOM at start of file followed by key is ignored",
 		dotenv: "\uFEFFKEY=value",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "BOM at start of file followed by export is ignored",
 		dotenv: "\uFEFFexport KEY=value",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "BOM at start of file followed by newline is ignored",
 		dotenv: "\uFEFF\nKEY=value",
-		want:   Store{"KEY": "value"},
+		want:   map[string]string{"KEY": "value"},
 	})
 
 	run(t, nil, cfg, testCase{name: "BOM can be part of an unquoted, single-quoted, or double-quoted value",
 		dotenv: "KEY=\uFEFFunq\nKEY2='\uFEFFsq'\nKEY3=\"\uFEFFdq\"",
-		want:   Store{"KEY": "\uFEFFunq", "KEY2": "\uFEFFsq", "KEY3": "\uFEFFdq"},
+		want:   map[string]string{"KEY": "\uFEFFunq", "KEY2": "\uFEFFsq", "KEY3": "\uFEFFdq"},
 	})
 
 	run(t, nil, cfg, testCase{name: "BOM at end of file on its own line is an error",
@@ -1072,7 +1071,7 @@ func TestBOM(t *testing.T) {
 // Test runner
 // ---------------------------------------------------------------------------
 
-func run(t *testing.T, store Store, cfg *Config, testCase testCase) {
+func run(t *testing.T, store *Store, cfg *Config, testCase testCase) {
 	t.Helper()
 
 	t.Run(testCase.name, func(t *testing.T) {
@@ -1081,10 +1080,10 @@ func run(t *testing.T, store Store, cfg *Config, testCase testCase) {
 		// LLM NOTE: you can change the implementation of the parser as needed
 
 		if store == nil {
-			store = NewStore()
+			store = NewStore(0)
 		}
 
-		err := store.SetFromString(testCase.dotenv, testCase.name, cfg)
+		err := store.ParseString(testCase.dotenv, testCase.name, cfg)
 
 		if err != nil {
 			if !testCase.wantErr {
@@ -1098,8 +1097,6 @@ func run(t *testing.T, store Store, cfg *Config, testCase testCase) {
 			return
 		}
 
-		if !maps.Equal(store, testCase.want) {
-			t.Errorf("\ngot  %q\nwant %q", store, testCase.want)
-		}
+		assertStoreEqual(t, store, testCase.want)
 	})
 }

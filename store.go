@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"strings"
 )
@@ -13,22 +14,54 @@ var (
 	ErrMissingRequiredKey = fmt.Errorf("Store missing required key")
 )
 
-type Store map[string]string
+// Store holds dotenv key-value pairs.
+// The zero value is ready to use.
+type Store struct {
+	data map[string]string
+}
 
-// NewStore makes a new Store with an empty data map.
-func NewStore() Store {
-	return make(Store)
+// NewStore makes a new Store with an empty data map sized for up to size entries.
+func NewStore(size int) *Store {
+	return &Store{
+		data: make(map[string]string, size),
+	}
+}
+
+// Len reports how many key-value pairs are stored.
+func (s *Store) Len() int {
+	return len(s.data)
+}
+
+// Entries returns a copy of the store's key-value pairs.
+func (s *Store) Entries() map[string]string {
+	return maps.Clone(s.data)
+}
+
+// MergeMap copies key-value pairs from the provided map into the store.
+func (s *Store) MergeMap(data map[string]string, overwrite bool) {
+	if len(data) == 0 {
+		return
+	}
+
+	if s.data == nil {
+		s.data = maps.Clone(data)
+		return
+	}
+
+	for key, value := range data {
+		s.Set(key, value, overwrite)
+	}
 }
 
 // Get retrieves a value from the store and reports whether the key was set.
-func (e Store) Get(key string) (string, bool) {
-	value, ok := e[key]
+func (s *Store) Get(key string) (string, bool) {
+	value, ok := s.data[key]
 	return value, ok
 }
 
 // GetRequired retrieves a value from the store, returning an error if the key is not set.
-func (e Store) GetRequired(key string) (string, error) {
-	value, ok := e.Get(key)
+func (s *Store) GetRequired(key string) (string, error) {
+	value, ok := s.Get(key)
 	if !ok {
 		return "", fmt.Errorf("%w: %s", ErrMissingRequiredKey, key)
 	}
@@ -37,35 +70,44 @@ func (e Store) GetRequired(key string) (string, error) {
 }
 
 // Set sets a value in the store, optionally overwriting an existing value.
-func (e Store) Set(key, value string, overwrite bool) {
-	if _, ok := e[key]; !ok || overwrite {
-		e[key] = value
+func (s *Store) Set(key, value string, overwrite bool) {
+	if s.data == nil {
+		s.data = make(map[string]string)
+	}
+
+	if _, ok := s.data[key]; !ok || overwrite {
+		s.data[key] = value
 	}
 }
 
-// Merge the key-value pairs from another Store into the current one, optionally overwriting existing values.
-func (e Store) Merge(store Store, overwrite bool) {
-	for k, v := range store {
-		e.Set(k, v, overwrite)
+// MergeStore copies key-value pairs from another Store into the current one,
+// optionally overwriting existing values.
+func (s *Store) MergeStore(store *Store, overwrite bool) {
+	if store == nil {
+		return
+	}
+
+	for key, value := range store.data {
+		s.Set(key, value, overwrite)
 	}
 }
 
-// SetFromOptionalDotEnv parses a dotenv file into the store using cfg.
+// ParseOptionalDotEnv parses a dotenv file into the store using cfg.
 // If the file does not exist, it returns nil without mutating the store.
 // A nil cfg is treated as an all-zero Config.
-func (e Store) SetFromOptionalDotEnv(path string, cfg *Config) error {
-	return e.setFromDotEnv(path, cfg, true)
+func (s *Store) ParseOptionalDotEnv(path string, cfg *Config) error {
+	return s.parseDotEnv(path, cfg, true)
 }
 
-// SetFromRequiredDotEnv parses a dotenv file into the store using cfg.
+// ParseRequiredDotEnv parses a dotenv file into the store using cfg.
 // If the file does not exist, it returns ErrMissingDotEnv.
 // A nil cfg is treated as an all-zero Config.
-func (e Store) SetFromRequiredDotEnv(path string, cfg *Config) error {
-	return e.setFromDotEnv(path, cfg, false)
+func (s *Store) ParseRequiredDotEnv(path string, cfg *Config) error {
+	return s.parseDotEnv(path, cfg, false)
 }
 
-func (e Store) setFromDotEnv(path string, cfg *Config, optional bool) error {
-	err := parseDotEnv(path, e, cfg)
+func (s *Store) parseDotEnv(path string, cfg *Config, optional bool) error {
+	err := parseDotEnv(path, s, cfg)
 	if err == nil {
 		return nil
 	}
@@ -80,20 +122,20 @@ func (e Store) setFromDotEnv(path string, cfg *Config, optional bool) error {
 	return err
 }
 
-// SetFromString parses dotenv contents from a string into the store using cfg.
+// ParseString parses dotenv contents from a string into the store using cfg.
 // A nil cfg is treated as an all-zero Config.
-func (e Store) SetFromString(s, name string, cfg *Config) error {
-	return parseString(s, name, e, cfg)
+func (s *Store) ParseString(str, name string, cfg *Config) error {
+	return parseString(str, name, s, cfg)
 }
 
-// SetFromReader parses dotenv contents from an io.Reader into the store using cfg.
+// ParseReader parses dotenv contents from an io.Reader into the store using cfg.
 // A nil cfg is treated as an all-zero Config.
-func (e Store) SetFromReader(r io.Reader, name string, cfg *Config) error {
-	return parseReader(r, name, e, cfg)
+func (s *Store) ParseReader(r io.Reader, name string, cfg *Config) error {
+	return parseReader(r, name, s, cfg)
 }
 
-// SetFromOsEnviron reads the current process environment variables and stores them in the Store.
-func (e Store) SetFromOsEnviron(allowlist, denylist map[string]struct{}, overwrite bool) {
+// ImportFromEnv reads the current process environment variables and stores them in the Store.
+func (s *Store) ImportFromEnv(allowkeys, denykeys map[string]struct{}, overwrite bool) {
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
 
@@ -101,71 +143,70 @@ func (e Store) SetFromOsEnviron(allowlist, denylist map[string]struct{}, overwri
 			continue
 		}
 
-		if allowlist != nil {
-			if _, ok := allowlist[parts[0]]; !ok {
+		if allowkeys != nil {
+			if _, ok := allowkeys[parts[0]]; !ok {
 				continue
 			}
 		}
 
-		if denylist != nil {
-			if _, ok := denylist[parts[0]]; ok {
+		if denykeys != nil {
+			if _, ok := denykeys[parts[0]]; ok {
 				continue
 			}
 		}
 
-		e.Set(parts[0], parts[1], overwrite)
+		s.Set(parts[0], parts[1], overwrite)
 	}
 }
 
-// LoadIntoOsEnviron loads the key-value pairs from the Store into
+// ExportToEnv loads the key-value pairs from the Store into
 // the process environment variables, optionally overwriting existing values.
-func (e Store) LoadIntoOsEnviron(allowlist, denylist map[string]struct{}, overwrite bool) {
-	for k, v := range e {
-
-		if allowlist != nil {
-			if _, ok := allowlist[k]; !ok {
+func (s *Store) ExportToEnv(allowkeys, denykeys map[string]struct{}, overwrite bool) {
+	for key, value := range s.data {
+		if allowkeys != nil {
+			if _, ok := allowkeys[key]; !ok {
 				continue
 			}
 		}
 
-		if denylist != nil {
-			if _, ok := denylist[k]; ok {
+		if denykeys != nil {
+			if _, ok := denykeys[key]; ok {
 				continue
 			}
 		}
 
-		if _, exists := os.LookupEnv(k); !exists || overwrite {
-			os.Setenv(k, v)
+		if _, exists := os.LookupEnv(key); !exists || overwrite {
+			os.Setenv(key, value)
 		}
 	}
 }
 
-// FilterKeys removes any keys that are not in the allowlist, or that are in the denylist.
-// A nil allowlist keeps all keys. A nil denylist removes no keys.
-func (e Store) FilterKeys(allowlist, denylist map[string]struct{}) {
-	for storeKey := range e {
-		if allowlist != nil {
-			if _, ok := allowlist[storeKey]; !ok {
-				delete(e, storeKey)
+// Filter removes any keys that are not in the allowkeys, or that are in the denykeys.
+// A nil allowkeys keeps all keys. A nil denykeys removes no keys.
+func (s *Store) Filter(allowkeys, denykeys map[string]struct{}) {
+	for key := range s.data {
+		if allowkeys != nil {
+			if _, ok := allowkeys[key]; !ok {
+				delete(s.data, key)
 				continue
 			}
 		}
 
-		if denylist != nil {
-			if _, ok := denylist[storeKey]; ok {
-				delete(e, storeKey)
+		if denykeys != nil {
+			if _, ok := denykeys[key]; ok {
+				delete(s.data, key)
 			}
 		}
 	}
 }
 
-// ProcessValue applies the double-quoted value transform pipeline to an
+// TransformValue applies the double-quoted value transform pipeline to an
 // existing store value in place. The stored value is treated as the raw bytes
 // that would have appeared between double quotes in a dotenv file. If the key
 // is missing, ErrMissingRequiredKey is returned. A nil cfg is treated as an
 // all-zero Config. Overwrite is ignored.
-func (e Store) ProcessValue(key string, cfg *Config) error {
-	value, err := e.GetRequired(key)
+func (s *Store) TransformValue(key string, cfg *Config) error {
+	value, err := s.GetRequired(key)
 	if err != nil {
 		return err
 	}
@@ -175,21 +216,21 @@ func (e Store) ProcessValue(key string, cfg *Config) error {
 		return fmt.Errorf("%s: %w", key, err)
 	}
 
-	e[key] = processed
+	s.data[key] = processed
 	return nil
 }
 
-// ProcessValues applies the double-quoted value transform pipeline to every
+// TransformValues applies the double-quoted value transform pipeline to every
 // value in the store. The Config is resolved the same way the parser uses
 // it: base settings apply to every key unless that key has explicit overrides.
 // A nil cfg is treated as an all-zero Config. Overwrite is ignored. If any
 // key fails to process, the store is left unchanged.
-func (e Store) ProcessValues(cfg *Config) error {
-	keys := make([]string, len(e))
-	values := make([]string, len(e))
+func (s *Store) TransformValues(cfg *Config) error {
+	keys := make([]string, len(s.data))
+	values := make([]string, len(s.data))
 
 	i := 0
-	for key, raw := range e {
+	for key, raw := range s.data {
 		value, err := processValue([]byte(raw), resolveOptions(key, cfg))
 		if err != nil {
 			return fmt.Errorf("%s: %w", key, err)
@@ -200,7 +241,7 @@ func (e Store) ProcessValues(cfg *Config) error {
 	}
 
 	for i, key := range keys {
-		e[key] = values[i]
+		s.data[key] = values[i]
 	}
 	return nil
 }
