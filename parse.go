@@ -11,7 +11,7 @@ import (
 // -----------------------------------------------------------------------------
 
 // parseDotEnv parses a dotenv file or named pipe into the provided store.
-func parseDotEnv(path string, store EnvStore, cfg *Config) error {
+func parseDotEnv(path string, store Store, cfg *Config) error {
 	if path == "" {
 		return fmt.Errorf("parse dotenv path cannot be empty")
 	}
@@ -28,7 +28,7 @@ func parseDotEnv(path string, store EnvStore, cfg *Config) error {
 }
 
 // parseString parses dotenv contents from a string into the provided store.
-func parseString(s, name string, store EnvStore, cfg *Config) error {
+func parseString(s, name string, store Store, cfg *Config) error {
 	if store == nil {
 		return fmt.Errorf("parse string store cannot be nil")
 	}
@@ -41,7 +41,7 @@ func parseString(s, name string, store EnvStore, cfg *Config) error {
 }
 
 // parseReader parses dotenv contents from an io.Reader into the provided store.
-func parseReader(r io.Reader, name string, store EnvStore, cfg *Config) error {
+func parseReader(r io.Reader, name string, store Store, cfg *Config) error {
 	if r == nil {
 		return fmt.Errorf("parse reader cannot be nil")
 	}
@@ -99,7 +99,7 @@ const (
 // byte slice and then enters a loop that pulls tokens one at a time, using a
 // switch-on-state/switch-on-token pattern to validate the grammar and extract
 // key-value pairs.
-func parse(name string, bytes []byte, store EnvStore, cfg *Config) error {
+func parse(name string, bytes []byte, store Store, cfg *Config) error {
 	l, err := lexFromBytes(name, bytes)
 	if err != nil {
 		return err

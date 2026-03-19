@@ -9,25 +9,25 @@ import (
 )
 
 var (
-	ErrMissingDotEnv      = fmt.Errorf("EnvStore missing dotenv file")
-	ErrMissingRequiredKey = fmt.Errorf("EnvStore missing required key")
+	ErrMissingDotEnv      = fmt.Errorf("Store missing dotenv file")
+	ErrMissingRequiredKey = fmt.Errorf("Store missing required key")
 )
 
-type EnvStore map[string]string
+type Store map[string]string
 
-// NewEnvStore makes a new EnvStore with an empty data map.
-func NewEnvStore() EnvStore {
-	return make(EnvStore)
+// NewStore makes a new Store with an empty data map.
+func NewStore() Store {
+	return make(Store)
 }
 
 // Get retrieves a value from the store and reports whether the key was set.
-func (e EnvStore) Get(key string) (string, bool) {
+func (e Store) Get(key string) (string, bool) {
 	value, ok := e[key]
 	return value, ok
 }
 
 // GetRequired retrieves a value from the store, returning an error if the key is not set.
-func (e EnvStore) GetRequired(key string) (string, error) {
+func (e Store) GetRequired(key string) (string, error) {
 	value, ok := e.Get(key)
 	if !ok {
 		return "", fmt.Errorf("%w: %s", ErrMissingRequiredKey, key)
@@ -37,14 +37,14 @@ func (e EnvStore) GetRequired(key string) (string, error) {
 }
 
 // Set sets a value in the store, optionally overwriting an existing value.
-func (e EnvStore) Set(key, value string, overwrite bool) {
+func (e Store) Set(key, value string, overwrite bool) {
 	if _, ok := e[key]; !ok || overwrite {
 		e[key] = value
 	}
 }
 
-// Merge the key-value pairs from another EnvStore into the current one, optionally overwriting existing values.
-func (e EnvStore) Merge(store EnvStore, overwrite bool) {
+// Merge the key-value pairs from another Store into the current one, optionally overwriting existing values.
+func (e Store) Merge(store Store, overwrite bool) {
 	for k, v := range store {
 		e.Set(k, v, overwrite)
 	}
@@ -53,18 +53,18 @@ func (e EnvStore) Merge(store EnvStore, overwrite bool) {
 // SetFromOptionalDotEnv parses a dotenv file into the store using cfg.
 // If the file does not exist, it returns nil without mutating the store.
 // A nil cfg is treated as an all-zero Config.
-func (e EnvStore) SetFromOptionalDotEnv(path string, cfg *Config) error {
+func (e Store) SetFromOptionalDotEnv(path string, cfg *Config) error {
 	return e.setFromDotEnv(path, cfg, true)
 }
 
 // SetFromRequiredDotEnv parses a dotenv file into the store using cfg.
 // If the file does not exist, it returns ErrMissingDotEnv.
 // A nil cfg is treated as an all-zero Config.
-func (e EnvStore) SetFromRequiredDotEnv(path string, cfg *Config) error {
+func (e Store) SetFromRequiredDotEnv(path string, cfg *Config) error {
 	return e.setFromDotEnv(path, cfg, false)
 }
 
-func (e EnvStore) setFromDotEnv(path string, cfg *Config, optional bool) error {
+func (e Store) setFromDotEnv(path string, cfg *Config, optional bool) error {
 	err := parseDotEnv(path, e, cfg)
 	if err == nil {
 		return nil
@@ -82,18 +82,18 @@ func (e EnvStore) setFromDotEnv(path string, cfg *Config, optional bool) error {
 
 // SetFromString parses dotenv contents from a string into the store using cfg.
 // A nil cfg is treated as an all-zero Config.
-func (e EnvStore) SetFromString(s, name string, cfg *Config) error {
+func (e Store) SetFromString(s, name string, cfg *Config) error {
 	return parseString(s, name, e, cfg)
 }
 
 // SetFromReader parses dotenv contents from an io.Reader into the store using cfg.
 // A nil cfg is treated as an all-zero Config.
-func (e EnvStore) SetFromReader(r io.Reader, name string, cfg *Config) error {
+func (e Store) SetFromReader(r io.Reader, name string, cfg *Config) error {
 	return parseReader(r, name, e, cfg)
 }
 
-// SetFromOsEnviron reads the current process environment variables and stores them in the EnvStore.
-func (e EnvStore) SetFromOsEnviron(allowlist, denylist map[string]struct{}, overwrite bool) {
+// SetFromOsEnviron reads the current process environment variables and stores them in the Store.
+func (e Store) SetFromOsEnviron(allowlist, denylist map[string]struct{}, overwrite bool) {
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
 
@@ -117,9 +117,9 @@ func (e EnvStore) SetFromOsEnviron(allowlist, denylist map[string]struct{}, over
 	}
 }
 
-// LoadIntoOsEnviron loads the key-value pairs from the EnvStore into
+// LoadIntoOsEnviron loads the key-value pairs from the Store into
 // the process environment variables, optionally overwriting existing values.
-func (e EnvStore) LoadIntoOsEnviron(allowlist, denylist map[string]struct{}, overwrite bool) {
+func (e Store) LoadIntoOsEnviron(allowlist, denylist map[string]struct{}, overwrite bool) {
 	for k, v := range e {
 
 		if allowlist != nil {
@@ -142,7 +142,7 @@ func (e EnvStore) LoadIntoOsEnviron(allowlist, denylist map[string]struct{}, ove
 
 // FilterKeys removes any keys that are not in the allowlist, or that are in the denylist.
 // A nil allowlist keeps all keys. A nil denylist removes no keys.
-func (e EnvStore) FilterKeys(allowlist, denylist map[string]struct{}) {
+func (e Store) FilterKeys(allowlist, denylist map[string]struct{}) {
 	for storeKey := range e {
 		if allowlist != nil {
 			if _, ok := allowlist[storeKey]; !ok {
@@ -164,7 +164,7 @@ func (e EnvStore) FilterKeys(allowlist, denylist map[string]struct{}) {
 // that would have appeared between double quotes in a dotenv file. If the key
 // is missing, ErrMissingRequiredKey is returned. A nil cfg is treated as an
 // all-zero Config. Overwrite is ignored.
-func (e EnvStore) ProcessValue(key string, cfg *Config) error {
+func (e Store) ProcessValue(key string, cfg *Config) error {
 	value, err := e.GetRequired(key)
 	if err != nil {
 		return err
@@ -184,7 +184,7 @@ func (e EnvStore) ProcessValue(key string, cfg *Config) error {
 // it: base settings apply to every key unless that key has explicit overrides.
 // A nil cfg is treated as an all-zero Config. Overwrite is ignored. If any
 // key fails to process, the store is left unchanged.
-func (e EnvStore) ProcessValues(cfg *Config) error {
+func (e Store) ProcessValues(cfg *Config) error {
 	keys := make([]string, len(e))
 	values := make([]string, len(e))
 

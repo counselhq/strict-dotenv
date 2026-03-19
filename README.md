@@ -14,7 +14,7 @@
 - unquoted, single-quoted, and double-quoted values
 - multi-line double-quoted value support
 - parsing from files, strings, and `io.Reader`
-- an `EnvStore` type for layering dotenv data with `os.Environ` or other sources
+- an `Store` type for layering dotenv data with `os.Environ` or other sources
 - helpful error messages with source name and line number
 - minimization of unexpected/undocumented behavior
 
@@ -52,7 +52,7 @@ import (
 )
 
 func main() {
-	store := strictdotenv.NewEnvStore()
+	store := strictdotenv.NewStore()
 	cfg := new(strictdotenv.Config)
 
 	if err := store.SetFromRequiredDotEnv(".env", cfg); err != nil {
@@ -72,7 +72,7 @@ The parse entry points take a `*Config`. `cfg := new(strictdotenv.Config)` and `
 
 ## Store Parse Methods
 
-All parse methods write into the receiver `EnvStore`. Parse failures return an error, and the file-based methods differ on missing-file handling as documented below.
+All parse methods write into the receiver `Store`. Parse failures return an error, and the file-based methods differ on missing-file handling as documented below.
 
 | Method                                   | Use when                                                         | Notes                                                                                                              |
 | ---------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -152,19 +152,19 @@ A few important points:
 - If `TransformCRLFToLF` is `false` and `TransformCRToLF` is `true`, a literal `CRLF` becomes two `LF` bytes.
 - If both `TransformCRLFToLF` and `TransformCRToLF` are `false`, literal `CRLF` and literal `CR` are preserved.
 
-## Working With `EnvStore`
+## Working With `Store`
 
-`EnvStore` is a `map[string]string` with a few convenience methods layered on top. You can use it like a normal map, or you can use the helper methods when you want map-style lookups, required-key checks, merges, or `os.Environ` integration.
+`Store` is a `map[string]string` with a few convenience methods layered on top. You can use it like a normal map, or you can use the helper methods when you want map-style lookups, required-key checks, merges, or `os.Environ` integration.
 
 ### Common store methods
 
 | Method                                              | Purpose                                                                 | Notes                                                                                             |
 | --------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `NewEnvStore()`                                     | Create an empty store                                                   | Returns a writable `map[string]string`                                                            |
+| `NewStore()`                                        | Create an empty store                                                   | Returns a writable `map[string]string`                                                            |
 | `Get(key)`                                          | Read a value with map-style presence reporting                          | Returns `(value, ok)` so empty strings can be distinguished from missing keys                     |
 | `GetRequired(key)`                                  | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                                       |
 | `Set(key, value, overwrite)`                        | Write one value                                                         | `overwrite=false` keeps an existing value                                                         |
-| `Merge(other, overwrite)`                           | Merge another `EnvStore` into this one                                  | Same overwrite semantics as `Set`                                                                 |
+| `Merge(other, overwrite)`                           | Merge another `Store` into this one                                     | Same overwrite semantics as `Set`                                                                 |
 | `ProcessValue(key, cfg)`                            | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
 | `ProcessValues(cfg)`                                | Reprocess every stored value using parser-style config resolution       | Applies base plus per-key options; leaves the store unchanged on error                            |
 | `SetFromOptionalDotEnv(path, cfg)`                  | Parse an optional dotenv file into the store                            | Missing files are ignored; `path` is used in parser error messages                                |
@@ -177,7 +177,7 @@ A few important points:
 
 ### Reprocess existing store values
 
-`ProcessValue` and `ProcessValues` let you apply the same double-quoted unescape and newline-normalization logic to values that are already in an `EnvStore`.
+`ProcessValue` and `ProcessValues` let you apply the same double-quoted unescape and newline-normalization logic to values that are already in an `Store`.
 
 - `ProcessValue(key, cfg)` treats one stored value as if it were the raw contents between double quotes in a dotenv file and resolves that key against the supplied `Config`.
 - `ProcessValues(cfg)` does the same for every key, using `Config` base settings and key-specific overrides exactly the way the parser resolves them.
@@ -201,7 +201,7 @@ if err := store.ProcessValue("PRIVATE_KEY", cfg); err != nil {
 `ProcessValues` is useful when values came from another source, such as `os.Environ`, and you want parser-style processing after they are already in the store:
 
 ```go
-store := strictdotenv.NewEnvStore()
+store := strictdotenv.NewStore()
 store.SetFromOsEnviron(nil, nil, false)
 
 cfg := new(strictdotenv.Config)
@@ -228,7 +228,7 @@ import (
 )
 
 func main() {
-	store := strictdotenv.NewEnvStore()
+	store := strictdotenv.NewStore()
 	cfg := new(strictdotenv.Config)
 	cfg.MergeGlobalOptions(strictdotenv.Options{Overwrite: new(true)})
 
@@ -266,7 +266,7 @@ import (
 )
 
 func main() {
-	store := strictdotenv.NewEnvStore()
+	store := strictdotenv.NewStore()
 	cfg := new(strictdotenv.Config)
 
 	if err := store.SetFromRequiredDotEnv(".env", cfg); err != nil {

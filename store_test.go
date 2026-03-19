@@ -10,13 +10,13 @@ import (
 	"testing"
 )
 
-func TestNewEnvStore(t *testing.T) {
-	store := NewEnvStore()
+func TestNewStore(t *testing.T) {
+	store := NewStore()
 	if store == nil {
-		t.Fatal("NewEnvStore returned nil")
+		t.Fatal("NewStore returned nil")
 	}
 	if len(store) != 0 {
-		t.Fatalf("NewEnvStore returned non-empty store: %v", store)
+		t.Fatalf("NewStore returned non-empty store: %v", store)
 	}
 
 	store.Set("KEY", "value", false)
@@ -25,8 +25,8 @@ func TestNewEnvStore(t *testing.T) {
 	}
 }
 
-func TestEnvStoreGet(t *testing.T) {
-	store := EnvStore{
+func TestStoreGet(t *testing.T) {
+	store := Store{
 		"PRESENT": "value",
 		"EMPTY":   "",
 	}
@@ -62,8 +62,8 @@ func TestEnvStoreGet(t *testing.T) {
 	})
 }
 
-func TestEnvStoreGetRequired(t *testing.T) {
-	store := EnvStore{"PRESENT": "value"}
+func TestStoreGetRequired(t *testing.T) {
+	store := Store{"PRESENT": "value"}
 
 	t.Run("returns existing value", func(t *testing.T) {
 		got, err := store.GetRequired("PRESENT")
@@ -92,29 +92,29 @@ func TestEnvStoreGetRequired(t *testing.T) {
 	})
 }
 
-func TestEnvStoreSet(t *testing.T) {
+func TestStoreSet(t *testing.T) {
 	t.Run("sets missing keys", func(t *testing.T) {
-		store := NewEnvStore()
+		store := NewStore()
 		store.Set("KEY", "value", false)
-		assertStoreEqual(t, store, EnvStore{"KEY": "value"})
+		assertStoreEqual(t, store, Store{"KEY": "value"})
 	})
 
 	t.Run("does not overwrite existing values when overwrite is false", func(t *testing.T) {
-		store := EnvStore{"KEY": "original"}
+		store := Store{"KEY": "original"}
 		store.Set("KEY", "replacement", false)
-		assertStoreEqual(t, store, EnvStore{"KEY": "original"})
+		assertStoreEqual(t, store, Store{"KEY": "original"})
 	})
 
 	t.Run("overwrites existing values when overwrite is true", func(t *testing.T) {
-		store := EnvStore{"KEY": "original"}
+		store := Store{"KEY": "original"}
 		store.Set("KEY", "replacement", true)
-		assertStoreEqual(t, store, EnvStore{"KEY": "replacement"})
+		assertStoreEqual(t, store, Store{"KEY": "replacement"})
 	})
 }
 
-func TestEnvStoreProcessValue(t *testing.T) {
+func TestStoreProcessValue(t *testing.T) {
 	t.Run("returns wrapped error for missing key", func(t *testing.T) {
-		store := NewEnvStore()
+		store := NewStore()
 
 		err := store.ProcessValue("MISSING", nil)
 		if err == nil {
@@ -129,7 +129,7 @@ func TestEnvStoreProcessValue(t *testing.T) {
 	})
 
 	t.Run("uses zero-value options when config is nil", func(t *testing.T) {
-		store := EnvStore{"KEY": "line1\\nline2\rline3"}
+		store := Store{"KEY": "line1\\nline2\rline3"}
 
 		if err := store.ProcessValue("KEY", nil); err != nil {
 			t.Fatalf("ProcessValue returned unexpected error: %v", err)
@@ -141,7 +141,7 @@ func TestEnvStoreProcessValue(t *testing.T) {
 	})
 
 	t.Run("resolves base and key-specific parse config", func(t *testing.T) {
-		store := EnvStore{
+		store := Store{
 			"KEY":   "a\\nb\rc",
 			"OTHER": "d\\ne\rf",
 		}
@@ -162,14 +162,14 @@ func TestEnvStoreProcessValue(t *testing.T) {
 			t.Fatalf("ProcessValue returned unexpected error for base config: %v", err)
 		}
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"KEY":   "a\\nb\rc",
 			"OTHER": "d\ne\nf",
 		})
 	})
 
 	t.Run("leaves the original value unchanged when processing fails", func(t *testing.T) {
-		store := EnvStore{"KEY": "trailing\\"}
+		store := Store{"KEY": "trailing\\"}
 		cfg := new(Config)
 		cfg.MergeGlobalOptions(Options{UnescapeBackslashBackslash: new(true)})
 
@@ -186,9 +186,9 @@ func TestEnvStoreProcessValue(t *testing.T) {
 	})
 }
 
-func TestEnvStoreProcessValues(t *testing.T) {
+func TestStoreProcessValues(t *testing.T) {
 	t.Run("uses zero-value options when config is nil", func(t *testing.T) {
-		store := EnvStore{
+		store := Store{
 			"A": "a\\nb",
 			"B": "c\rd",
 		}
@@ -197,14 +197,14 @@ func TestEnvStoreProcessValues(t *testing.T) {
 			t.Fatalf("ProcessValues returned unexpected error: %v", err)
 		}
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"A": `a\nb`,
 			"B": "c\rd",
 		})
 	})
 
 	t.Run("applies base and key-specific parse config", func(t *testing.T) {
-		store := EnvStore{
+		store := Store{
 			"BASE":  "a\\nb",
 			"KEY":   "c\\nd\re",
 			"OTHER": "f\rg",
@@ -223,7 +223,7 @@ func TestEnvStoreProcessValues(t *testing.T) {
 			t.Fatalf("ProcessValues returned unexpected error: %v", err)
 		}
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"BASE":  "a\nb",
 			"KEY":   "c\\nd\re",
 			"OTHER": "f\ng",
@@ -231,7 +231,7 @@ func TestEnvStoreProcessValues(t *testing.T) {
 	})
 
 	t.Run("returns an error and leaves the store unchanged when any value fails", func(t *testing.T) {
-		store := EnvStore{
+		store := Store{
 			"BAD":  "trailing\\",
 			"GOOD": "a\\nb",
 		}
@@ -251,23 +251,23 @@ func TestEnvStoreProcessValues(t *testing.T) {
 	})
 }
 
-func TestEnvStoreSetFromOptionalDotEnv(t *testing.T) {
+func TestStoreSetFromOptionalDotEnv(t *testing.T) {
 	t.Run("nil config uses zero-value options and preserves existing entries by default", func(t *testing.T) {
-		store := EnvStore{"EXISTING": "keep"}
+		store := Store{"EXISTING": "keep"}
 		path := writeDotEnvFile(t, "EXISTING=replace\nNEW=\"line1\\nline2\"\n")
 
 		if err := store.SetFromOptionalDotEnv(path, nil); err != nil {
 			t.Fatalf("SetFromOptionalDotEnv returned unexpected error: %v", err)
 		}
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"EXISTING": "keep",
 			"NEW":      `line1\nline2`,
 		})
 	})
 
 	t.Run("returns parser errors", func(t *testing.T) {
-		store := NewEnvStore()
+		store := NewStore()
 		path := writeDotEnvFile(t, "INVALID LINE")
 
 		err := store.SetFromOptionalDotEnv(path, nil)
@@ -280,20 +280,20 @@ func TestEnvStoreSetFromOptionalDotEnv(t *testing.T) {
 	})
 
 	t.Run("is a no-op when the dotenv file is missing", func(t *testing.T) {
-		store := EnvStore{"EXISTING": "keep"}
+		store := Store{"EXISTING": "keep"}
 		path := filepath.Join(t.TempDir(), "missing.env")
 
 		if err := store.SetFromOptionalDotEnv(path, nil); err != nil {
 			t.Fatalf("SetFromOptionalDotEnv returned unexpected error for missing file: %v", err)
 		}
 
-		assertStoreEqual(t, store, EnvStore{"EXISTING": "keep"})
+		assertStoreEqual(t, store, Store{"EXISTING": "keep"})
 	})
 }
 
-func TestEnvStoreSetFromRequiredDotEnv(t *testing.T) {
+func TestStoreSetFromRequiredDotEnv(t *testing.T) {
 	t.Run("honors parse config overwrite", func(t *testing.T) {
-		store := EnvStore{"EXISTING": "keep"}
+		store := Store{"EXISTING": "keep"}
 		path := writeDotEnvFile(t, "EXISTING=replace\nNEW=value\n")
 		cfg := new(Config)
 		cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
@@ -302,14 +302,14 @@ func TestEnvStoreSetFromRequiredDotEnv(t *testing.T) {
 			t.Fatalf("SetFromRequiredDotEnv returned unexpected error: %v", err)
 		}
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"EXISTING": "replace",
 			"NEW":      "value",
 		})
 	})
 
 	t.Run("returns parser errors", func(t *testing.T) {
-		store := NewEnvStore()
+		store := NewStore()
 		path := writeDotEnvFile(t, "INVALID LINE")
 
 		err := store.SetFromRequiredDotEnv(path, nil)
@@ -322,7 +322,7 @@ func TestEnvStoreSetFromRequiredDotEnv(t *testing.T) {
 	})
 
 	t.Run("returns ErrMissingDotEnv when the dotenv file is missing", func(t *testing.T) {
-		store := EnvStore{"EXISTING": "keep"}
+		store := Store{"EXISTING": "keep"}
 		path := filepath.Join(t.TempDir(), "missing.env")
 
 		err := store.SetFromRequiredDotEnv(path, nil)
@@ -336,26 +336,26 @@ func TestEnvStoreSetFromRequiredDotEnv(t *testing.T) {
 			t.Fatalf("SetFromRequiredDotEnv error = %q, want missing path included", err.Error())
 		}
 
-		assertStoreEqual(t, store, EnvStore{"EXISTING": "keep"})
+		assertStoreEqual(t, store, Store{"EXISTING": "keep"})
 	})
 }
 
-func TestEnvStoreSetFromString(t *testing.T) {
+func TestStoreSetFromString(t *testing.T) {
 	t.Run("nil config uses zero-value options and preserves existing entries by default", func(t *testing.T) {
-		store := EnvStore{"EXISTING": "keep"}
+		store := Store{"EXISTING": "keep"}
 
 		if err := store.SetFromString("EXISTING=replace\nNEW=\"line1\\nline2\"\n", "inline.env", nil); err != nil {
 			t.Fatalf("SetFromString returned unexpected error: %v", err)
 		}
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"EXISTING": "keep",
 			"NEW":      `line1\nline2`,
 		})
 	})
 
 	t.Run("uses the default source name when name is empty", func(t *testing.T) {
-		store := NewEnvStore()
+		store := NewStore()
 
 		err := store.SetFromString("INVALID LINE", "", nil)
 		if err == nil {
@@ -367,9 +367,9 @@ func TestEnvStoreSetFromString(t *testing.T) {
 	})
 }
 
-func TestEnvStoreSetFromReader(t *testing.T) {
+func TestStoreSetFromReader(t *testing.T) {
 	t.Run("loads values and honors parse config overwrite", func(t *testing.T) {
-		store := EnvStore{"EXISTING": "keep"}
+		store := Store{"EXISTING": "keep"}
 		cfg := new(Config)
 		cfg.MergeGlobalOptions(Options{Overwrite: new(true)})
 
@@ -378,14 +378,14 @@ func TestEnvStoreSetFromReader(t *testing.T) {
 			t.Fatalf("SetFromReader returned unexpected error: %v", err)
 		}
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"EXISTING": "replace",
 			"NEW":      "value",
 		})
 	})
 
 	t.Run("uses the default source name when name is empty", func(t *testing.T) {
-		store := NewEnvStore()
+		store := NewStore()
 
 		err := store.SetFromReader(strings.NewReader("INVALID LINE"), "", nil)
 		if err == nil {
@@ -397,7 +397,7 @@ func TestEnvStoreSetFromReader(t *testing.T) {
 	})
 
 	t.Run("returns an error for a nil reader", func(t *testing.T) {
-		store := NewEnvStore()
+		store := NewStore()
 
 		err := store.SetFromReader(nil, "reader.env", nil)
 		if err == nil {
@@ -409,7 +409,7 @@ func TestEnvStoreSetFromReader(t *testing.T) {
 	})
 }
 
-func TestEnvStoreSetFromOsEnviron(t *testing.T) {
+func TestStoreSetFromOsEnviron(t *testing.T) {
 	t.Run("respects allowlist denylist and overwrite=false", func(t *testing.T) {
 		allowedKey := testEnvKey(t, "allowed")
 		deniedKey := testEnvKey(t, "denied")
@@ -423,14 +423,14 @@ func TestEnvStoreSetFromOsEnviron(t *testing.T) {
 		setTestEnv(t, equalsKey, "left=right")
 		setTestEnv(t, filteredKey, "filtered-out")
 
-		store := EnvStore{
+		store := Store{
 			"UNCHANGED": "value",
 			existingKey: "from-store",
 		}
 
 		store.SetFromOsEnviron(keySet(allowedKey, deniedKey, existingKey, equalsKey), keySet(deniedKey), false)
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"UNCHANGED": "value",
 			allowedKey:  "allowed-value",
 			existingKey: "from-store",
@@ -447,7 +447,7 @@ func TestEnvStoreSetFromOsEnviron(t *testing.T) {
 		setTestEnv(t, overwrittenKey, "from-os")
 		setTestEnv(t, deniedKey, "blocked")
 
-		store := EnvStore{
+		store := Store{
 			overwrittenKey: "from-store",
 		}
 
@@ -465,7 +465,7 @@ func TestEnvStoreSetFromOsEnviron(t *testing.T) {
 	})
 }
 
-func TestEnvStoreLoadIntoOsEnviron(t *testing.T) {
+func TestStoreLoadIntoOsEnviron(t *testing.T) {
 	t.Run("loads missing values and respects filters without overwrite", func(t *testing.T) {
 		missingKey := testEnvKey(t, "missing")
 		existingKey := testEnvKey(t, "existing")
@@ -477,7 +477,7 @@ func TestEnvStoreLoadIntoOsEnviron(t *testing.T) {
 		unsetTestEnv(t, deniedKey)
 		unsetTestEnv(t, filteredKey)
 
-		store := EnvStore{
+		store := Store{
 			missingKey:  "from-store",
 			existingKey: "from-store",
 			deniedKey:   "blocked",
@@ -501,7 +501,7 @@ func TestEnvStoreLoadIntoOsEnviron(t *testing.T) {
 		setTestEnv(t, existingKey, "from-os")
 		unsetTestEnv(t, deniedKey)
 
-		store := EnvStore{
+		store := Store{
 			missingKey:  "from-store",
 			existingKey: "from-store",
 			deniedKey:   "blocked",
@@ -515,74 +515,74 @@ func TestEnvStoreLoadIntoOsEnviron(t *testing.T) {
 	})
 }
 
-func TestEnvStoreMerge(t *testing.T) {
+func TestStoreMerge(t *testing.T) {
 	t.Run("does not overwrite existing keys when overwrite is false", func(t *testing.T) {
-		store := EnvStore{"EXISTING": "keep"}
-		store.Merge(EnvStore{
+		store := Store{"EXISTING": "keep"}
+		store.Merge(Store{
 			"EXISTING": "replace",
 			"NEW":      "value",
 		}, false)
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"EXISTING": "keep",
 			"NEW":      "value",
 		})
 	})
 
 	t.Run("overwrites existing keys when overwrite is true", func(t *testing.T) {
-		store := EnvStore{"EXISTING": "keep"}
-		store.Merge(EnvStore{
+		store := Store{"EXISTING": "keep"}
+		store.Merge(Store{
 			"EXISTING": "replace",
 			"NEW":      "value",
 		}, true)
 
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"EXISTING": "replace",
 			"NEW":      "value",
 		})
 	})
 }
 
-func TestEnvStoreFilterKeys(t *testing.T) {
+func TestStoreFilterKeys(t *testing.T) {
 	t.Run("keeps only allowlisted keys when denylist is nil", func(t *testing.T) {
-		store := EnvStore{
+		store := Store{
 			"KEEP": "value",
 			"DROP": "value",
 		}
 
 		store.FilterKeys(keySet("KEEP"), nil)
-		assertStoreEqual(t, store, EnvStore{"KEEP": "value"})
+		assertStoreEqual(t, store, Store{"KEEP": "value"})
 	})
 
 	t.Run("removes only denylisted keys when allowlist is nil", func(t *testing.T) {
-		store := EnvStore{
+		store := Store{
 			"KEEP": "value",
 			"DROP": "value",
 		}
 
 		store.FilterKeys(nil, keySet("DROP"))
-		assertStoreEqual(t, store, EnvStore{"KEEP": "value"})
+		assertStoreEqual(t, store, Store{"KEEP": "value"})
 	})
 
 	t.Run("denylist wins when a key appears in both filters", func(t *testing.T) {
-		store := EnvStore{
+		store := Store{
 			"KEEP": "value",
 			"BOTH": "value",
 			"DROP": "value",
 		}
 
 		store.FilterKeys(keySet("KEEP", "BOTH"), keySet("BOTH"))
-		assertStoreEqual(t, store, EnvStore{"KEEP": "value"})
+		assertStoreEqual(t, store, Store{"KEEP": "value"})
 	})
 
 	t.Run("does nothing when both filters are nil", func(t *testing.T) {
-		store := EnvStore{
+		store := Store{
 			"KEEP": "value",
 			"DROP": "value",
 		}
 
 		store.FilterKeys(nil, nil)
-		assertStoreEqual(t, store, EnvStore{
+		assertStoreEqual(t, store, Store{
 			"KEEP": "value",
 			"DROP": "value",
 		})
@@ -678,7 +678,7 @@ func keySet(keys ...string) map[string]struct{} {
 	return set
 }
 
-func assertStoreEqual(t *testing.T, got, want EnvStore) {
+func assertStoreEqual(t *testing.T, got, want Store) {
 	t.Helper()
 
 	if !maps.Equal(got, want) {
