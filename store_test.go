@@ -446,7 +446,7 @@ func TestStoreParseReader(t *testing.T) {
 }
 
 func TestStoreImportFromEnv(t *testing.T) {
-	t.Run("respects allowkeys denykeys and overwrite=false", func(t *testing.T) {
+	t.Run("respects allowKeys denyKeys and overwrite=false", func(t *testing.T) {
 		allowedKey := testEnvKey(t, "allowed")
 		deniedKey := testEnvKey(t, "denied")
 		existingKey := testEnvKey(t, "existing")
@@ -474,7 +474,7 @@ func TestStoreImportFromEnv(t *testing.T) {
 		})
 	})
 
-	t.Run("imports from os environment when allowkeys is nil and overwrite=true", func(t *testing.T) {
+	t.Run("imports from os environment when allowKeys is nil and overwrite=true", func(t *testing.T) {
 		importedKey := testEnvKey(t, "imported")
 		overwrittenKey := testEnvKey(t, "overwritten")
 		deniedKey := testEnvKey(t, "denied")
@@ -530,7 +530,7 @@ func TestStoreExportToEnv(t *testing.T) {
 		assertEnvMissing(t, filteredKey)
 	})
 
-	t.Run("overwrites existing values when overwrite=true and allowkeys is nil", func(t *testing.T) {
+	t.Run("overwrites existing values when overwrite=true and allowKeys is nil", func(t *testing.T) {
 		missingKey := testEnvKey(t, "missing")
 		existingKey := testEnvKey(t, "existing")
 		deniedKey := testEnvKey(t, "denied")
@@ -582,7 +582,7 @@ func TestStoreMergeStore(t *testing.T) {
 }
 
 func TestStoreFilter(t *testing.T) {
-	t.Run("keeps only allowed keys when denykeys is nil", func(t *testing.T) {
+	t.Run("keeps only allowed keys when denyKeys is nil", func(t *testing.T) {
 		store := storeOf(map[string]string{
 			"KEEP": "value",
 			"DROP": "value",
@@ -592,7 +592,7 @@ func TestStoreFilter(t *testing.T) {
 		assertStoreEqual(t, store, map[string]string{"KEEP": "value"})
 	})
 
-	t.Run("removes only denied keys when allowkeys is nil", func(t *testing.T) {
+	t.Run("removes only denied keys when allowKeys is nil", func(t *testing.T) {
 		store := storeOf(map[string]string{
 			"KEEP": "value",
 			"DROP": "value",
@@ -602,7 +602,7 @@ func TestStoreFilter(t *testing.T) {
 		assertStoreEqual(t, store, map[string]string{"KEEP": "value"})
 	})
 
-	t.Run("denykeys wins when a key appears in both filters", func(t *testing.T) {
+	t.Run("denyKeys wins when a key appears in both filters", func(t *testing.T) {
 		store := storeOf(map[string]string{
 			"KEEP": "value",
 			"BOTH": "value",

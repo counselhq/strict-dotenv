@@ -135,7 +135,7 @@ func (s *Store) ParseReader(r io.Reader, name string, cfg *Config) error {
 }
 
 // ImportFromEnv reads the current process environment variables and stores them in the Store.
-func (s *Store) ImportFromEnv(allowkeys, denykeys map[string]struct{}, overwrite bool) {
+func (s *Store) ImportFromEnv(allowKeys, denyKeys map[string]struct{}, overwrite bool) {
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
 
@@ -143,14 +143,14 @@ func (s *Store) ImportFromEnv(allowkeys, denykeys map[string]struct{}, overwrite
 			continue
 		}
 
-		if allowkeys != nil {
-			if _, ok := allowkeys[parts[0]]; !ok {
+		if allowKeys != nil {
+			if _, ok := allowKeys[parts[0]]; !ok {
 				continue
 			}
 		}
 
-		if denykeys != nil {
-			if _, ok := denykeys[parts[0]]; ok {
+		if denyKeys != nil {
+			if _, ok := denyKeys[parts[0]]; ok {
 				continue
 			}
 		}
@@ -161,16 +161,16 @@ func (s *Store) ImportFromEnv(allowkeys, denykeys map[string]struct{}, overwrite
 
 // ExportToEnv loads the key-value pairs from the Store into
 // the process environment variables, optionally overwriting existing values.
-func (s *Store) ExportToEnv(allowkeys, denykeys map[string]struct{}, overwrite bool) {
+func (s *Store) ExportToEnv(allowKeys, denyKeys map[string]struct{}, overwrite bool) {
 	for key, value := range s.data {
-		if allowkeys != nil {
-			if _, ok := allowkeys[key]; !ok {
+		if allowKeys != nil {
+			if _, ok := allowKeys[key]; !ok {
 				continue
 			}
 		}
 
-		if denykeys != nil {
-			if _, ok := denykeys[key]; ok {
+		if denyKeys != nil {
+			if _, ok := denyKeys[key]; ok {
 				continue
 			}
 		}
@@ -181,19 +181,19 @@ func (s *Store) ExportToEnv(allowkeys, denykeys map[string]struct{}, overwrite b
 	}
 }
 
-// Filter removes any keys that are not in the allowkeys, or that are in the denykeys.
-// A nil allowkeys keeps all keys. A nil denykeys removes no keys.
-func (s *Store) Filter(allowkeys, denykeys map[string]struct{}) {
+// Filter removes any keys that are not in the allowKeys, or that are in the denyKeys.
+// A nil allowKeys keeps all keys. A nil denyKeys removes no keys.
+func (s *Store) Filter(allowKeys, denyKeys map[string]struct{}) {
 	for key := range s.data {
-		if allowkeys != nil {
-			if _, ok := allowkeys[key]; !ok {
+		if allowKeys != nil {
+			if _, ok := allowKeys[key]; !ok {
 				delete(s.data, key)
 				continue
 			}
 		}
 
-		if denykeys != nil {
-			if _, ok := denykeys[key]; ok {
+		if denyKeys != nil {
+			if _, ok := denyKeys[key]; ok {
 				delete(s.data, key)
 			}
 		}

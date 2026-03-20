@@ -74,8 +74,8 @@ The parse entry points take a `*Config`. `cfg := new(strictdotenv.Config)` and `
 
 All parse methods write into the receiver `*Store`. Parse failures return an error, and the file-based methods differ on missing-file handling as documented below.
 
-| Method                                   | Use when                                                         | Notes                                                                                                              |
-| ---------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Method                                 | Use when                                                         | Notes                                                                                                              |
+| -------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `store.ParseOptionalDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe, but it is optional | Missing files are ignored; `path` is used in parser error messages; `nil` cfg means all-zero options               |
 | `store.ParseRequiredDotEnv(path, cfg)` | You have a dotenv file on disk or named pipe and it must exist   | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages; `nil` cfg means all-zero options |
 | `store.ParseString(str, name, cfg)`    | You already have the dotenv contents in memory                   | `name` is used to identify source in error messages (default `"string"`); `nil` cfg means all-zero options         |
@@ -158,25 +158,25 @@ A few important points:
 
 ### Common store methods
 
-| Method                                              | Purpose                                                                 | Notes                                                                                             |
-| --------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `NewStore(size)`                                    | Create an empty store                                                   | Returns a `*Store`; `size` is passed to `make` as the initial map capacity                        |
-| `Len()`                                             | Count stored key-value pairs                                            | Avoids copying when you only need the size                                                        |
-| `Entries()`                                         | Read the whole store as a map snapshot                                  | Returns a copy, so mutating it does not mutate the `Store`                                        |
-| `Get(key)`                                          | Read a value with presence reporting                                    | Returns `(value, ok)` so empty strings can be distinguished from missing keys                     |
-| `GetRequired(key)`                                  | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                                       |
-| `Set(key, value, overwrite)`                        | Write one value                                                         | `overwrite=false` keeps an existing value                                                         |
-| `MergeMap(data, overwrite)`                         | Merge key-value pairs from a map into this store                        | Same overwrite semantics as `Set`                                                                 |
-| `MergeStore(other, overwrite)`                      | Merge another `Store` into this one                                     | Same overwrite semantics as `Set`                                                                 |
-| `TransformValue(key, cfg)`                          | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
-| `TransformValues(cfg)`                              | Reprocess every stored value using parser-style config resolution       | Applies base plus per-key options; leaves the store unchanged on error                            |
-| `ParseOptionalDotEnv(path, cfg)`                    | Parse an optional dotenv file into the store                            | Missing files are ignored; `path` is used in parser error messages                                |
-| `ParseRequiredDotEnv(path, cfg)`                    | Parse a required dotenv file into the store                             | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages                  |
-| `ParseString(str, name, cfg)`                       | Parse dotenv contents from a string into the store                      | If `name` is empty, errors use `"string"` as source name                                          |
-| `ParseReader(r, name, cfg)`                         | Parse dotenv contents from an `io.Reader` into the store                | If `name` is empty, errors use `"io.Reader"` as source name                                       |
-| `ImportFromEnv(allowkeys, denykeys, overwrite)`     | Import from the current process environment                             | `allowkeys` and `denykeys` are `map[string]struct{}`                                              |
-| `ExportToEnv(allowkeys, denykeys, overwrite)`       | Export store values into the current process environment                | Existing OS values are preserved unless `overwrite` is `true`                                     |
-| `Filter(allowkeys, denykeys)`                       | Remove keys that fail the combined filters                              | `nil` allowkeys keeps all; `nil` denykeys removes none; denykeys win on overlap                   |
+| Method                                          | Purpose                                                                 | Notes                                                                                             |
+| ----------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `NewStore(size)`                                | Create an empty store                                                   | Returns a `*Store`; `size` is passed to `make` as the initial map capacity                        |
+| `Len()`                                         | Count stored key-value pairs                                            | Avoids copying when you only need the size                                                        |
+| `Entries()`                                     | Read the whole store as a map snapshot                                  | Returns a copy, so mutating it does not mutate the `Store`                                        |
+| `Get(key)`                                      | Read a value with presence reporting                                    | Returns `(value, ok)` so empty strings can be distinguished from missing keys                     |
+| `GetRequired(key)`                              | Read a value that must exist                                            | Missing keys return `ErrMissingRequiredKey`                                                       |
+| `Set(key, value, overwrite)`                    | Write one value                                                         | `overwrite=false` keeps an existing value                                                         |
+| `MergeMap(data, overwrite)`                     | Merge key-value pairs from a map into this store                        | Same overwrite semantics as `Set`                                                                 |
+| `MergeStore(other, overwrite)`                  | Merge another `Store` into this one                                     | Same overwrite semantics as `Set`                                                                 |
+| `TransformValue(key, cfg)`                      | Reprocess one existing value using the double-quoted transform pipeline | `nil` cfg uses all-zero options; base plus key-specific config resolution is applied for that key |
+| `TransformValues(cfg)`                          | Reprocess every stored value using parser-style config resolution       | Applies base plus per-key options; leaves the store unchanged on error                            |
+| `ParseOptionalDotEnv(path, cfg)`                | Parse an optional dotenv file into the store                            | Missing files are ignored; `path` is used in parser error messages                                |
+| `ParseRequiredDotEnv(path, cfg)`                | Parse a required dotenv file into the store                             | Missing files return `ErrMissingDotEnv`; `path` is used in parser error messages                  |
+| `ParseString(str, name, cfg)`                   | Parse dotenv contents from a string into the store                      | If `name` is empty, errors use `"string"` as source name                                          |
+| `ParseReader(r, name, cfg)`                     | Parse dotenv contents from an `io.Reader` into the store                | If `name` is empty, errors use `"io.Reader"` as source name                                       |
+| `ImportFromEnv(allowKeys, denyKeys, overwrite)` | Import from the current process environment                             | `allowKeys` and `denyKeys` are `map[string]struct{}`                                              |
+| `ExportToEnv(allowKeys, denyKeys, overwrite)`   | Export store values into the current process environment                | Existing OS values are preserved unless `overwrite` is `true`                                     |
+| `Filter(allowKeys, denyKeys)`                   | Remove keys that fail the combined filters                              | `nil` allowKeys keeps all; `nil` denyKeys removes none; denyKeys win on overlap                   |
 
 ### Reprocess existing store values
 
